@@ -25,13 +25,14 @@ proc genPaging*(data: JsonNode, url: Uri3, perPage: int64, numData: int64): Json
       let numPage = (numData.float64 / limit.float64).ceil().int64
       result["numData"] = %numData
       result["numPage"] = %numPage
-      if currentPage < numPage and currentPage > 1:
+      if currentPage < numPage:
         let nextPage = currentPage * limit
         url.setQuery("page", $(currentPage + 1))
         result["nextPage"] = % $url
         
-        url.setQuery("page", $(currentPage - 1))
-        result["prevPage"] = % $url
+        if currentPage > 1:
+          url.setQuery("page", $(currentPage - 1))
+          result["prevPage"] = % $url
 
       url.setQuery("page", $numPage)
       result["lastPage"] = % $url
