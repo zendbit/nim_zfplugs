@@ -11,9 +11,9 @@ proc genPaging*(data: JsonNode, url: Uri3, perPage: int64, numData: int64): Json
     "pageData": data,
     "nextPage": "",
     "prevPage": "",
-    "numPage": 0,
+    "numPage": 1,
     "page": 1,
-    "numData": 0,
+    "numData": numData,
     "lastPage": "",
     "firstPage": ""}
 
