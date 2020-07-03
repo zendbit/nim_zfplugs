@@ -4,9 +4,6 @@ import
   db_sqlite,
   strformat
 
-import
-  zfcore/zendflow
-
 type
   Dbs* = ref object
     database: string

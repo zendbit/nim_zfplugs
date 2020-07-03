@@ -1,9 +1,9 @@
 import
   base64,
-  strutils
+  strutils,
+  httpcore
 
-import
-  zfcore/zendflow
+from zfcore import getHttpHeaderValues
 
 proc validateBasicAuth*(httpHeaders: HttpHeaders, username: string, password: string): bool =
   let auth = ($"Authorization".getHttpHeaderValues(httpHeaders)).split(" ")
