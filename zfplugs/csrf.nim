@@ -7,7 +7,9 @@ import
   os,
   strutils
 
-let csrfDb = "csrf.db"
+from zfcore import zfc
+
+let csrfDb = zfc.settings.tmpDir.joinPath("csrf.db")
 
 var db: db_sqlite.DbConn
 if db.isNil:
