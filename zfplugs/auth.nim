@@ -6,7 +6,7 @@ import
 from zfcore import getHttpHeaderValues
 
 proc validateBasicAuth*(httpHeaders: HttpHeaders, username: string, password: string): bool =
-  let auth = ($"Authorization".getHttpHeaderValues(httpHeaders)).split(" ")
+  let auth = httpHeaders.getHttpHeaderValues("Authorization").split(" ")
   if auth.len() == 2:
     let userPass = auth[1].decode().split(":")
     if userPass.len() == 2:
