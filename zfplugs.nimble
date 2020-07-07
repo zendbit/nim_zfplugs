@@ -6,4 +6,4 @@ license     = "BSD"
 
 # Deps
 requires "nim >= 1.0.0"
-requires "zfcore >= 1.0.14"
+requires "zfcore >= 1.0.15"
