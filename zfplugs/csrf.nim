@@ -1,61 +1,34 @@
+#[
+  zfcore web framework for nim language
+  This framework if free to use and to modify
+  License: BSD
+  Author: Amru Rosyada
+  Email: amru.rosyada@gmail.com
+  Git: https://github.com/zendbit
+]#
+
 # csrf generator and manager
-import
-  dbs,
-  db_sqlite,
-  times,
-  std/sha1,
-  os,
-  strutils
+import dbs, db_sqlite, times, std/sha1, os, strutils, asyncdispatch
+import zfcore
+from stdext.encrypt_ext import xorEncodeDecode
 
-from zfcore import zfc
+let csrfDir = zfcoreInstance.settings.tmpDir.joinPath("csrf")
+if not csrfDir.existsDir:
+  csrfDir.createDir
 
-let csrfDb = zfc.settings.tmpDir.joinPath("csrf.db")
-
-var db: db_sqlite.DbConn
-if db.isNil:
-  db = newDbs(csrfDb).trySqLiteConn().conn
-
-if not fileExists(csrfDb) and not db.isNil:
-  db.exec(sql"""
-    CREATE TABLE IF NOT EXISTS csrf (
-      token TEXT NOT NULL,
-      created_date DATETIME NOT NULL,
-      info TEXT
-    )""")
-  db.close()
-
-proc cleanInvalidCsrf*() =
-  if not db.isNil:
-    discard db.getRow(sql"""
-      DELETE FROM csrf WHERE
-        (CAST(strftime('%s', ?)  AS  integer)
-        - CAST(strftime('%s', created_date)  AS  integer) > 3600)
-      """, $now().utc)
-    db.close()
+if csrfDir.existsDir:
+  zfcoreInstance.settings.addTmpCleanupDir("csrf")
 
 proc genCsrf*(): string =
-  if not db.isNil:
-    cleanInvalidCsrf()
-    let tokenSeed = now().utc.format("yyyy-MM-dd HH:mm:ss:ffffff")
-    let token = $secureHash(tokenSeed)
-    discard db.tryInsertId(sql"""
-      INSERT INTO csrf
-        (token, created_date)
-        VALUES (?, ?)
-      """, token, tokenSeed)
-    db.close()
-    result = token
+  let tokenSeed = now().utc.format("yyyy-MM-dd HH:mm:ss:fffffffff")
+  let token = $secureHash(tokenSeed)
+  let f = csrfDir.joinPath(token).open(fmWrite)
+  f.write("")
+  f.close
+  result = token
 
 proc isCsrfValid*(token: string): bool =
-  if not db.isNil:
-    if token.strip() != "":
-      return db.getValue(sql"""SELECT token FROM csrf WHERE token = ?""", token) == token
-    db.close()
-    result = false
+  return csrfDir.joinPath(token).existsFile
 
 proc delCsrf*(token: string) =
-  if not db.isNil:
-    if token.strip() != "":
-      discard db.getRow(sql"""DELETE FROM csrf WHERE token = ?""", token)
-    db.close()
-
+  csrfDir.joinPath(token).removeFile

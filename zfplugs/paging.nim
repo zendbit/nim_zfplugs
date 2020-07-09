@@ -1,8 +1,13 @@
-import
-  uri3,
-  json,
-  math,
-  strutils
+#[
+  zfcore web framework for nim language
+  This framework if free to use and to modify
+  License: BSD
+  Author: Amru Rosyada
+  Email: amru.rosyada@gmail.com
+  Git: https://github.com/zendbit
+]#
+
+import uri3, json, math, strutils
 
 proc genPaging*(data: JsonNode, url: Uri3, perPage: int64, numData: int64): JsonNode =
   let limit = url.getQuery("perPage", "20").parseBiggestInt

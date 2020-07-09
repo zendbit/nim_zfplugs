@@ -1,8 +1,13 @@
-import
-  base64,
-  strutils,
-  httpcore
+#[
+  zfcore web framework for nim language
+  This framework if free to use and to modify
+  License: BSD
+  Author: Amru Rosyada
+  Email: amru.rosyada@gmail.com
+  Git: https://github.com/zendbit
+]#
 
+import base64, strutils, httpcore
 from zfcore import getHttpHeaderValues
 
 proc validateBasicAuth*(httpHeaders: HttpHeaders, username: string, password: string): bool =
