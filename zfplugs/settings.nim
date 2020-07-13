@@ -8,9 +8,10 @@
 ]#
 
 import os, json
+import zfcore
 
 let jsonSettingsFile = joinPath(getAppDir(), "settings.json")
-var jsonSettings*: JsonNode
+var jsonSettings* {.threadvar.}: JsonNode
 if existsFile(jsonSettingsFile):
   try:
     echo "settings.json found."
@@ -21,3 +22,5 @@ if existsFile(jsonSettingsFile):
 
 else:
   echo "settings.json not found!!."
+  echo "load default zfcore settings."
+  jsonSettings = %zfcoreInstance.settings
