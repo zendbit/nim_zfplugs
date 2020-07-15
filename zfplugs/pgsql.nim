@@ -31,6 +31,7 @@ type
 # }
 #
 proc newPgSql*(connId: string): PgSql =
+  let jsonSettings = jsonSettings()
   if not jsonSettings.isNil:
     let db = jsonSettings{"database"}
     if not db.isNil:

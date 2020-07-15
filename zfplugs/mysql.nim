@@ -31,6 +31,7 @@ type
 # }
 #
 proc newMySql*(connId: string): MySql =
+  let jsonSettings = jsonSettings()
   if not jsonSettings.isNil:
     let db = jsonSettings{"database"}
     if not db.isNil:

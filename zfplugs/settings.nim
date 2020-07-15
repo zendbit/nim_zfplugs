@@ -10,17 +10,18 @@
 import os, json
 import zfcore
 
-let jsonSettingsFile = joinPath(getAppDir(), "settings.json")
-var jsonSettings* {.threadvar.}: JsonNode
-if existsFile(jsonSettingsFile):
-  try:
-    echo "settings.json found."
-    jsonSettings = parseFile(jsonSettingsFile)
+# thead safe
+var settings {.threadvar.}: Settings
+deepCopy(settings, zfcoreInstance.settings)
 
-  except Exception as ex:
-    echo ex.msg
+proc jsonSettings*(): JsonNode {.gcsafe.} =
+  let jsonSettingsFile = joinPath(getAppDir(), "settings.json")
+  if existsFile(jsonSettingsFile):
+    try:
+      result = parseFile(jsonSettingsFile)
 
-else:
-  echo "settings.json not found!!."
-  echo "load default zfcore settings."
-  jsonSettings = %zfcoreInstance.settings
+    except Exception as ex:
+      echo ex.msg
+
+  else:
+    result = %settings
