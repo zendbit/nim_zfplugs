@@ -20,6 +20,9 @@ if csrfDir.existsDir:
   zfcoreInstance.settings.addTmpCleanupDir("csrf")
 
 proc genCsrf*(): string =
+  #
+  # generate csrf
+  #
   let tokenSeed = now().utc.format("yyyy-MM-dd HH:mm:ss:fffffffff")
   let token = $secureHash(tokenSeed)
   let f = csrfDir.joinPath(token).open(fmWrite)
@@ -28,7 +31,13 @@ proc genCsrf*(): string =
   result = token
 
 proc isCsrfValid*(token: string): bool =
+  #
+  # check if csrf valid
+  #
   return csrfDir.joinPath(token).existsFile
 
 proc delCsrf*(token: string) =
+  #
+  # delete the csrf token
+  #
   csrfDir.joinPath(token).removeFile

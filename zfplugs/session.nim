@@ -7,17 +7,20 @@
   Git: https://github.com/zendbit
 ]#
 
-import std/sha1
+import std/sha1, macros
 import zfcore, stdext.encrypt_ext
+
+const sessid = "_zfsid"
 
 let sessionDir = zfcoreInstance.settings.tmpDir.joinPath("session")
 if not sessionDir.existsDir:
   sessionDir.createDir
 
 if sessionDir.existsDir:
-  zfcoreInstance.settings.addTmpCleanupDir("session")
+  # keep the session for month
+  zfcoreInstance.settings.addTmpCleanupDir("session", 2592000)
 
-proc isSessionExists*(sessionToken: string): bool =
+proc isSessionExists(sessionToken: string): bool =
   #
   # check if session exists with given session token
   #
@@ -32,27 +35,24 @@ proc writeSession(sessionToken: string, data: JsonNode): bool {.discardable.} =
   f.close
   result = sessionToken.isSessionExists
 
-proc createSessionToken*(sessionAge: int64 = 3600): string =
+proc createSessionToken(): string =
   #
-  # this will generate unique token for the session with given sessionAge in seconds.
-  # default sessionAge is 3600 seconds or 1 hour
   # the session token will be used for accessing the session
   #
   let token = $secureHash(now().utc().format("YYYY-MM-dd HH:mm:ss:fffffffff"))
-  token.writeSession(%*{"maxAge": sessionAge})
+  token.writeSession(%*{})
   return token
 
-proc createSessionFromToken*(token: string, sessionAge: int64 = 3600): bool =
+proc createSessionFromToken(token: string): bool =
   #
   # this will generate session with given token and sessionAge in seconds.
   # will check if session conflict with other session or not
-  # default sessionAge is 3600 seconds or 1 hour
   # the session token will be used for accessing the session
   #
   if not token.isSessionExists:
-    token.writeSession(%*{"maxAge": sessionAge})
+    token.writeSession(%*{})
 
-proc readSession*(sessionToken: string): JsonNode =
+proc readSession(sessionToken: string): JsonNode =
   #
   # read session data with given token
   #
@@ -61,38 +61,84 @@ proc readSession*(sessionToken: string): JsonNode =
     result = f.readAll().xorEncodeDecode(sessionToken).parseJson
     f.close
 
-proc getSession*(sessionToken: string, key: string): JsonNode =
+proc getSession*(ctx: HttpContext, key: string): JsonNode =
   #
   # get session value with given session token and key
   #
-  let sessionData = sessionToken.readSession()
+  let sessionData = ctx.getCookie().getOrDefault(sessid).readSession()
   if not sessionData.isNil:
     result = sessionData{key}
 
-proc addSession*(sessionToken: string, key: string, value: JsonNode): bool {.discardable.} =
+proc addSession*(ctx: HttpContext, key: string, value: JsonNode) =
   #
   # add session
   #
-  let sessionData = sessionToken.readSession
+  let token = ctx.getCookie().getOrDefault(sessid)
+  if token != "":
+    token = cookie[sessid]
+
+  else:
+    token = createSessionToken()
+    ctx.setCookie({sessid: token}.newStringTable)
+
+  let sessionData = token.readSession
   if not sessionData.isNil:
     sessionData[key] = value
-    sessionToken.writeSession(sessionData)
-    result = not sessionToken.getSession(key).isNil
+    token.writeSession(sessionData)
 
-proc deleteSession*(sessionToken: string, key: string): bool {.discardable.} =
+proc deleteSession*(ctx: HttpContext, key: string) =
   #
   # delete session value with given session token and key
   #
-  let sessionData = sessionToken.readSession
+  let sessionData = ctx.getCookie().getOrDefault(sessid).readSession
   if not sessionData.isNil:
     if sessionData.hasKey(key):
       sessionData.delete(key)
-      result = sessionToken.getSession(key).isNil
 
-proc destroySession*(sessionToken: string): bool {.discardable.} =
+proc destroySession*(ctx: HttpContext) =
   #
   # destroy session data
   #
-  sessionDir.joinPath(sessionToken).removeFile
-  return sessionToken.isSessionExists
+  var cookie = ctx.getCookie
+  let token = cookie.getOrDefault(sessid)
+  if token != "":
+    sessionDir.joinPath(token).removeFile
+    cookie.del(sessid)
+    ctx.setCookie(cookie)
+
+macro addSession*(key: string, value: JsonNode) =
+  nnkCall.newTree(
+    nnkDotExpr.newTree(
+      newIdentNode("ctx"),
+      newIdentNode("addSession")
+    ),
+    key,
+    value
+  )
+
+macro getSession*(key: string): untyped =
+  return nnkCall.newTree(
+    nnkDotExpr.newTree(
+      newIdentNode("ctx"),
+      newIdentNode("getSession")
+    ),
+    key
+  )
+
+macro deleteSession*(key: string): untyped =
+  nnkCall.newTree(
+    nnkDotExpr.newTree(
+      newIdentNode("ctx"),
+      newIdentNode("deleteSession")
+    ),
+    key
+  )
+
+macro destroySession*(): untyped =
+  nnkCall.newTree(
+    nnkDotExpr.newTree(
+      newIdentNode("ctx"),
+      newIdentNode("destroySession")
+    )
+  )
 
