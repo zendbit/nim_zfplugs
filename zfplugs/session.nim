@@ -73,7 +73,8 @@ proc addSession*(ctx: HttpContext, key: string, value: JsonNode) =
   #
   # add session
   #
-  let token = ctx.getCookie().getOrDefault(sessid)
+  let cookie = ctx.getCookie
+  var token = cookie.getOrDefault(sessid)
   if token != "":
     token = cookie[sessid]
 
