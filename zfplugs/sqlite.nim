@@ -56,19 +56,13 @@ proc newSqLite*(connId: string): SqLite =
     else:
       echo "database section not found!!."
 
-# close database connection
-proc close*(self: SqLite) =
-  if not self.isNil:
-    self.conn.close()
-
 # test ping the server
-proc ping*(self: SqLite): bool =
-  if not self.isNil:
-    try:
-      self.conn.exec(sql "SELECT 1")
-      result = true
-    except:
-      discard
+proc ping*(conn: DbConn): bool =
+  try:
+    conn.exec(sql "SELECT 1")
+    result = true
+  except:
+    discard
 
 # get connId
 proc connId*(self: SqLite): string =

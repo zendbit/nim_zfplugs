@@ -56,19 +56,13 @@ proc newPgSql*(connId: string): PgSql =
     else:
       echo "database section not found!!."
 
-# close database connection
-proc close*(self: PgSql) =
-  if not self.isNil:
-    self.conn.close()
-
 # test ping the server
-proc ping*(self: PgSql): bool =
-  if not self.isNil:
-    try:
-      self.conn.exec(sql "SELECT 1")
-      result = true
-    except:
-      discard
+proc ping*(conn: DbConn): bool =
+  try:
+    conn.exec(sql "SELECT 1")
+    result = true
+  except:
+    discard
 
 # get connId
 proc connId*(self: PgSql): string =
