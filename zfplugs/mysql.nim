@@ -61,6 +61,15 @@ proc close*(self: MySql) =
   if not self.isNil:
     self.conn.close()
 
+# test ping the server
+proc ping*(self: MySql): bool =
+  if not self.isNil:
+    try:
+      self.conn.exec(sql "SELECT 1")
+      result = true
+    except:
+      discard
+
 # get connId
 proc connId*(self: MySql): string =
   if not self.isNil:
