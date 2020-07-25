@@ -23,7 +23,7 @@ proc genCsrf*(): string =
   #
   # generate csrf
   #
-  let tokenSeed = now().utc.format("yyyy-MM-dd HH:mm:ss:fffffffff")
+  let tokenSeed = now().utc.format("yyyy-MM-dd HH:mm:ss:fffffffff".initTimeFormat)
   let token = $secureHash(tokenSeed)
   let f = csrfDir.joinPath(token).open(fmWrite)
   f.write("")
