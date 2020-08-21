@@ -8,12 +8,13 @@
 ]#
 
 import db_mysql, strformat, json
-
 import dbs, settings
 
 type
+  DbInfo* = tuple[username: string, password: string, database: string, host: string, port: int]
   MySql* = ref object
     connId: string
+    dbInfo: DbInfo
     conn: DbConn
 
 #var db: DBConn
@@ -38,12 +39,18 @@ proc newMySql*(connId: string): MySql =
       let dbConf = db{connId}
       if not dbConf.isNil:
         result = MySql(connId: connId)
-        let c = newDbs(
+        result.dbInfo = (
           dbConf{"database"}.getStr(),
           dbConf{"username"}.getStr(),
           dbConf{"password"}.getStr(),
           dbConf{"host"}.getStr(),
-          dbConf{"port"}.getInt()).tryMySqlConn()
+          dbConf{"port"}.getInt())
+        let c = newDbs(
+          result.dbInfo.database,
+          result.dbInfo.username,
+          result.dbInfo.password,
+          result.dbInfo.host,
+          result.dbInfo.port).tryMySqlConn()
 
         if c.success:
           result.conn = c.conn
@@ -55,6 +62,9 @@ proc newMySql*(connId: string): MySql =
 
     else:
       echo "database section not found!!."
+
+proc getDbInfo*(mySqlDb: MySql): DbInfo =
+  return mySqlDb.dbInfo
 
 # test ping the server
 proc ping*(conn: DbConn): bool =

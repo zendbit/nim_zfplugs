@@ -12,8 +12,10 @@ import db_postgres, strformat, json
 import dbs, settings
 
 type
+  DbInfo* = tuple[username: string, password: string, database: string, host: string, port: int]
   PgSql* = ref object
     connId: string
+    dbInfo: DbInfo
     conn: DbConn
 
 #var db: DBConn
@@ -38,12 +40,18 @@ proc newPgSql*(connId: string): PgSql =
       let dbConf = db{connId}
       if not dbConf.isNil:
         result = PgSql(connId: connId)
-        let c = newDbs(
+        result.dbInfo = (
           dbConf{"database"}.getStr(),
           dbConf{"username"}.getStr(),
           dbConf{"password"}.getStr(),
           dbConf{"host"}.getStr(),
-          dbConf{"port"}.getInt()).tryPgSqlConn()
+          dbConf{"port"}.getInt())
+        let c = newDbs(
+          result.dbInfo.database,
+          result.dbInfo.username,
+          result.dbInfo.password,
+          result.dbInfo.host,
+          result.dbInfo.port).tryPgSqlConn()
 
         if c.success:
           result.conn = c.conn
@@ -55,6 +63,9 @@ proc newPgSql*(connId: string): PgSql =
 
     else:
       echo "database section not found!!."
+
+proc getDbInfo*(pgSqlDb: PgSql): DbInfo =
+  return pgSqlDb.dbInfo
 
 # test ping the server
 proc ping*(conn: DbConn): bool =
