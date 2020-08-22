@@ -38,12 +38,10 @@ proc tryPgSqlConn*(self: Dbs): tuple[success: bool, conn: db_postgres.DbConn, ms
       result = (
         true,
           db_postgres.open(
-          "",
+          &"{self.host}:{self.port}",
           self.username,
           self.password,
-          (&"host={self.host} " &
-          &"port={self.port} " &
-          &"dbname={self.database} ")),
+          self.database),
         "OK")
     except Exception as ex:
       result = (false, nil, ex.msg)
@@ -62,12 +60,10 @@ proc tryMySqlConn*(self: Dbs): tuple[success: bool, conn: db_mysql.DbConn, msg: 
       result = (
         true,
         db_mysql.open(
-          "",
+          &"{self.host}:{self.port}",
           self.username,
           self.password,
-          (&"host={self.host} " &
-          &"port={self.port} " &
-          &"dbname={self.database} ")),
+          self.database),
         "OK")
     except Exception as ex:
       result = (false, nil, ex.msg)

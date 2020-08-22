@@ -12,7 +12,7 @@ import db_sqlite, strformat, json
 import dbs, settings
 
 type
-  DbInfo* = tuple[username: string, password: string, database: string, host: string, port: int]
+  DbInfo* = tuple[database: string, username: string, password: string, host: string, port: int]
   SqLite* = ref object
     connId: string
     dbInfo: DbInfo
