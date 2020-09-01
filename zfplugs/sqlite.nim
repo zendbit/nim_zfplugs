@@ -121,7 +121,7 @@ proc update*(
 
   # add where param
   for wParams in whereParams:
-    setVal.add(wParams)
+    setValParam.add(wParams)
 
   return self.conn.execAffectedRows(sql &"""{sqlStr} {tbl} SET {setVal.join(",")} WHERE {where}""", setValParam)
 

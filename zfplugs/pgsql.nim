@@ -117,7 +117,7 @@ proc update*(
       setValKV.add("?")
       setValParam.add(v)
     
-    setVal.add(setValKV.join("="))
+    setValParam.add(setValKV.join("="))
 
   # add where param
   for wParams in whereParams:
