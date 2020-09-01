@@ -91,17 +91,14 @@ proc tryInsertId*(self: SqLite, tbl: string, keyValues: openArray[tuple[k: strin
   result = -1
   try:
     result = self.insertId(tbl, keyValues)
-  except:
-    discard
+  except Exception as ex:
+    ex.msg
 
 proc update*(
   self: SqLite, tbl: string, keyValues: openArray[tuple[k: string, v: string]],
   where: string, whereParams: varargs[string, `$`]): int64 =
   ### update data table
   var sqlStr = "UPDATE"
-  #var keys: seq[string] = @[]
-  #var values: seq[string] = @[]
-  #var valuesParam: seq[string] = @[]
   var setVal: seq[string] = @[]
   var setValParam: seq[string] = @[]
   for kv in keyValues:
@@ -132,8 +129,8 @@ proc tryUpdate*(self: SqLite, tbl: string, keyValues: openArray[tuple[k: string,
   result = -1
   try:
     result = self.update(tbl, keyValues, where, whereParams)
-  except:
-    discard
+  except Exception as ex:
+    echo ex.msg
 
 proc dbError*(self: SqLite) =
   ###
