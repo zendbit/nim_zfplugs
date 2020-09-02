@@ -7,7 +7,8 @@
   Git: https://github.com/zendbit
 ]#
 
-import db_postgres, db_mysql, db_sqlite, strformat
+import db_postgres, db_mysql, db_sqlite, strformat, json, strutils
+import stdext/[strutils_ext]
 
 type
   Dbs* = ref object
@@ -98,3 +99,22 @@ proc trySqliteCheck*(self: Dbs): tuple[success: bool, msg: string] =
       return (true, "OK")
     except Exception as ex:
       result = (false, ex.msg)
+
+proc toDbType*(field: string, value: string): JsonNode =
+  let data = field.split(":")
+  result = %*{data[0]: nil}
+  if data.len == 2:
+    if value != "":
+      case data[1]
+      of "int":
+        result[data[0]] = %value.tryParseInt().val
+      of "bigInt":
+        result[data[0]] = %value.tryParseBiggestInt().val
+      of "float":
+        result[data[0]] = %value.tryParseFloat().val
+      of "bigFloat":
+        result[data[0]] = %value.tryParseBiggestFloat().val
+      of "bool":
+        result[data[0]] = %value.tryParseBool().val
+  elif value != "":
+    result[data[0]] = %value

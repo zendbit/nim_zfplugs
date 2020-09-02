@@ -65,72 +65,64 @@ proc newPgSql*(connId: string): PgSql =
       echo "database section not found!!."
 
 # insert into database
-proc insertId*(self: PgSql, tbl: string, keyValues: openArray[tuple[k: string, v: string]]): int64 =
-  var sqlStr = "INSERT INTO"
-  var keys: seq[string] = @[]
-  var values: seq[string] = @[]
-  var valuesParam: seq[string] = @[]
-  for kv in keyValues:
-    let k = kv[0]
-    let v = kv[1]
-    keys.add(k)
-    if v.toLower == "nil" or
-      v.toLower == "null" or
-      v.toLower == ($dbNull).toLower:
-       values.add("NULL")
-    else:
-      values.add("?")
-      valuesParam.add(v)
-
-  return self.conn.insertId(sql &"""{sqlStr} {tbl} ({keys.join(",")}) VALUES ({values.join(",")})""", valuesParam)
-
-# try insert into database
-proc tryInsertId*(self: PgSql, tbl: string, keyValues: openArray[tuple[k: string, v: string]]): int64 =
-  ### try insert into the table
-  ### return -1 if error occured
-  result = -1
+proc insertId*(
+  self: PgSql, tbl: string, keyValues: openArray[tuple[k: string, v: string]]
+  ): tuple[ok: bool, insertId: int64, msg: string] =
   try:
-    result = self.insertId(tbl, keyValues)
+    var sqlStr = "INSERT INTO"
+    var keys: seq[string] = @[]
+    var values: seq[string] = @[]
+    var valuesParam: seq[string] = @[]
+    for kv in keyValues:
+      let k = kv[0]
+      let v = kv[1]
+      keys.add(k)
+      if v.toLower == "nil" or
+        v.toLower == "null" or
+        v.toLower == ($dbNull).toLower:
+         values.add("NULL")
+      else:
+        values.add("?")
+        valuesParam.add(v)
+
+    return (true,
+      self.conn.insertId(sql &"""{sqlStr} {tbl} ({keys.join(",")}) VALUES ({values.join(",")})""", valuesParam),
+      "ok")
   except Exception as ex:
-    echo ex.msg
+    return (false, 0'i64, ex.msg)
 
 proc update*(
   self: PgSql, tbl: string, keyValues: openArray[tuple[k: string, v: string]],
-  where: string, whereParams: varargs[string, `$`]): int64 =
+  stmt: string, params: varargs[string, `$`]): tuple[ok: bool, affected: int64, msg: string] =
   ### update data table
-  var sqlStr = "UPDATE"
-  var setVal: seq[string] = @[]
-  var setValParam: seq[string] = @[]
-  for kv in keyValues:
-    let k = kv[0]
-    let v = kv[1]
-    var setValKV: seq[string] = @[]
-    setValKV.add(k)
-    if v.toLower == "nil" or
-      v.toLower == "null" or
-      v.toLower == ($dbNull).toLower:
-       setValKV.add("NULL")
-    else:
-      setValKV.add("?")
-      setValParam.add(v)
-    
-    setValParam.add(setValKV.join("="))
-
-  # add where param
-  for wParams in whereParams:
-    setVal.add(wParams)
-
-  return self.conn.execAffectedRows(sql &"""{sqlStr} {tbl} SET {setVal.join(",")} WHERE {where}""", setValParam)
-
-proc tryUpdate*(self: PgSql, tbl: string, keyValues: openArray[tuple[k: string, v: string]],
-  where: string, whereParams: varargs[string, `$`]): int64 =
-  ### try update into the table
-  ### return -1 if error occured
-  result = -1
   try:
-    result = self.update(tbl, keyValues, where, whereParams)
+    var sqlStr = "UPDATE"
+    var setVal: seq[string] = @[]
+    var setValParam: seq[string] = @[]
+    for kv in keyValues:
+      let k = kv[0]
+      let v = kv[1]
+      var setValKV: seq[string] = @[]
+      setValKV.add(k)
+      if v.toLower == "nil" or
+        v.toLower == "null" or
+        v.toLower == ($dbNull).toLower:
+         setValKV.add("NULL")
+      else:
+        setValKV.add("?")
+        setValParam.add(v)
+      
+      setVal.add(setValKV.join("="))
+
+    # add where param
+    for wParams in params:
+      setValParam.add(wParams)
+
+    return (true,
+      self.conn.execAffectedRows(sql &"""{sqlStr} {tbl} SET {setVal.join(",")} WHERE {stmt}""", setValParam),
+      "ok")
   except Exception as ex:
-    echo ex.msg
+    return (false, 0'i64, ex.msg)
 
 proc dbError*(self: PgSql) =
   ###
@@ -144,78 +136,78 @@ proc dbQuote*(s: string): string =
   ###
   return dbQuote(s)
 
-proc tryExec*(self: PgSql, query: SqlQuery, args: varargs[string, `$`]): bool =
+proc exec*(self: PgSql, query: string, args: varargs[string, `$`]): tuple[ok: bool, msg: string] =
   ###
-  ### try execute the query return true if success
+  ### execute the query
   ###
-  return self.conn.tryExec(query, args)
+  try:
+    self.conn.exec(sql query, args)
+    return (true, "ok")
+  except Exception as ex:
+    return (false, ex.msg)
 
-proc exec*(self: PgSql, query: SqlQuery, args: varargs[string, `$`]) =
-  ###
-  ### execute the query raise dbError if error
-  ###
-  self.conn.exec(query, args)
-
-proc getRow*(self: PgSql, query: SqlQuery, args: varargs[string, `$`]): Row =
+proc getRow*(self: PgSql, tbl: string, fields: openArray[string],
+  stmt: string = "", params: varargs[string, `$`] = []): tuple[ok: bool, row: JsonNode, msg: string] =
   ###
   ### Retrieves a single row. If the query doesn't return any rows,
   ### this proc will return a Row with empty strings for each column
   ###
-  return self.conn.getRow(query, args)
+  try:
+    let f = fields.map(proc (x: string): string = (x.split(":"))[0]).join(",")
+    let sqlStr = &"""SELECT {f} FROM"""
+    let queryResult = self.conn.getRow(sql &"{sqlStr} {tbl} {stmt}", params)
+    var res = %*{}
+    if queryResult[0] != "":
+      for i in 0..fields.high:
+        for k, v in fields[i].toDbType(queryResult[i]):
+          var fname = k.toLower()
+          if fname.contains(" as "):
+            fname = fname.split(" as ")[1].strip
+          res[fname] = v
+    return (true, res, "ok")
+  except Exception as ex:
+    return (false, nil, ex.msg)
 
-proc getAllRows*(self: PgSql, query: SqlQuery, args: varargs[string, `$`]): seq[Row] =
+proc getAllRows*(self: PgSql, tbl: string, fields: openArray[string],
+  stmt: string = "", params: varargs[string, `$`] = []): tuple[ok: bool, rows: JsonNode, msg: string] =
   ###
-  ### executes the query and returns the whole result dataset
+  ### Retrieves a single row. If the query doesn't return any rows,
+  ### this proc will return a Row with empty strings for each column
   ###
-  return self.conn.getAllRows(query, args)
+  try:
+    let f = fields.map(proc (x: string): string = (x.split(":"))[0]).join(",")
+    let sqlStr = &"""SELECT {f} FROM"""
+    let queryResult = self.conn.getAllRows(sql &"{sqlStr} {tbl} {stmt}", params)
+    var res: seq[JsonNode] = @[]
+    if queryResult[0][0] != "":
+      for qres in queryResult:
+        var resItem = %*{}
+        for i in 0..fields.high:
+          for k, v in fields[i].toDbType(qres[i]):
+            var fname = k.toLower()
+            if fname.contains(" as "):
+              fname = fname.split(" as ")[1].strip
+            resItem[fname] = v
+        res.add(resItem)
+    return (true, %res, "ok")
+  except Exception as ex:
+    return (false, nil, ex.msg)
 
-proc getValue*(self: PgSql, query: SqlQuery, args: varargs[string, `$`]): string =
-  ###
-  ### executes the query and returns the first column of the first row of the result dataset.
-  ### Returns "" if the dataset contains no rows or the database value is NULL
-  ###
-  return self.conn.getValue(query, args)
-
-proc execAffectedRows*(self: PgSql, query: SqlQuery, args: varargs[string, `$`]): int64 =
+proc execAffectedRows*(
+  self: PgSql, query: string, args: varargs[string, `$`]): tuple[ok: bool, affected: int64, msg: string] =
   ###
   ### runs the query (typically "UPDATE") and returns the number of affected rows
   ###
-  return self.conn.execAffectedRows(query, args)
+  try:
+    return (true, self.conn.execAffectedRows(sql query, args), "ok")
+  except Exception as ex:
+    return (false, 0'i64, ex.msg)
 
 proc setEncoding(self: PgSql, encoding: string): bool =
   ###
   ### sets the encoding of a database connection, returns true for success, false for failure
   ###
   return self.conn.setEncoding(encoding)
-
-template fastRows(self: PgSql, query: SqlQuery, args: varargs[string, `$`]): iterator =
-  ###
-  ### executes the query and iterates over the result dataset.
-  ### This is very fast, but potentially dangerous. Use this iterator only if you require ALL the rows.
-  ### Breaking the fastRows() iterator during a loop
-  ### will cause the next database query to raise an [EDb] exception Commands out of sync.
-  ###
-  self.conn.fastRows(query, args)
-
-template instantRows(self: PgSql, query: SqlQuery, args: varargs[string, `$`]): iterator =
-  ###
-  ### Same as fastRows but returns a handle that can be used to get column text on demand using [].
-  ### Returned handle is valid only within the iterator body
-  ###
-  self.conn.instantRows(query, args)
-
-template instantRows(self: PgSql, columns: var DbColumns, query: SqlQuery, args: varargs[string, `$`]): iterator =
-  ###
-  ### Same as fastRows but returns a handle that can be used to get column text on demand using [].
-  ### Returned handle is valid only within the iterator body
-  ###
-  self.conn.instantRows(columns, query, args)
-
-template rows(self: PgSql, query: SqlQuery, args: varargs[string, `$`]): iterator =
-  ###
-  ### same as fastRows, but slower and safe
-  ###
-  self.conn.rows(query, args)
 
 proc getDbInfo*(self: PgSql): DbInfo =
   return self.dbInfo
