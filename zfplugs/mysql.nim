@@ -84,7 +84,7 @@ proc insertId*(
           valuesParam.add($v)
         else:
           valuesParam.add(v.getStr)
-    echo &"""{sqlStr} {tbl} ({keys.join(",")}) VALUES ({values.join(",")})"""
+    
     return (true,
       self.conn.insertId(sql &"""{sqlStr} {tbl} ({keys.join(",")}) VALUES ({values.join(",")})""", valuesParam),
       "ok")
@@ -116,9 +116,9 @@ proc update*(
     # add where param
     for wParams in params:
       setValParam.add(wParams)
-
+    
     return (true,
-      self.conn.execAffectedRows(sql &"""{sqlStr} {tbl} SET {setVal.join(",")} WHERE {stmt}""", setValParam),
+      self.conn.execAffectedRows(sql &"""{sqlStr} {tbl} SET {setVal.join(",")} {stmt}""", setValParam),
       "ok")
   except Exception as ex:
     return (false, 0'i64, ex.msg)
