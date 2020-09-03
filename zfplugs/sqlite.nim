@@ -17,6 +17,7 @@ type
     connId: string
     dbInfo: DbInfo
     conn: DbConn
+    connected: bool
 
 #var db: DBConn
 
@@ -53,6 +54,7 @@ proc newSqLite*(connId: string): SqLite =
           result.dbInfo.host,
           result.dbInfo.port).trySqLiteConn()
 
+        result.connected = c.success
         if c.success:
           result.conn = c.conn
         else:
@@ -141,6 +143,8 @@ proc exec*(self: SqLite, query: string, args: varargs[string, `$`]): tuple[ok: b
   ### execute the query
   ###
   try:
+    if not self.connected:
+      return (false, "can't connect to the database.")
     self.conn.exec(sql query, args)
     return (true, "ok")
   except Exception as ex:
@@ -153,6 +157,8 @@ proc getRow*(self: SqLite, tbl: string, fields: openArray[string],
   ### this proc will return a Row with empty strings for each column
   ###
   try:
+    if not self.connected:
+      return (false, nil, "can't connect to the database.")
     let f = fields.map(proc (x: string): string = (x.split(":"))[0]).join(",")
     let sqlStr = &"""SELECT {f} FROM"""
     let queryResult = self.conn.getRow(sql &"{sqlStr} {tbl} {stmt}", params)
@@ -175,6 +181,8 @@ proc getAllRows*(self: SqLite, tbl: string, fields: openArray[string],
   ### this proc will return a Row with empty strings for each column
   ###
   try:
+    if not self.connected:
+      return (false, nil, "can't connect to the database.")
     let f = fields.map(proc (x: string): string = (x.split(":"))[0]).join(",")
     let sqlStr = &"""SELECT {f} FROM"""
     let queryResult = self.conn.getAllRows(sql &"{sqlStr} {tbl} {stmt}", params)
@@ -199,6 +207,8 @@ proc execAffectedRows*(
   ### runs the query (typically "UPDATE") and returns the number of affected rows
   ###
   try:
+    if not self.connected:
+      return (false, 0'i64, "can't connect to the database.")
     return (true, self.conn.execAffectedRows(sql query, args), "ok")
   except Exception as ex:
     return (false, 0'i64, ex.msg)
@@ -207,6 +217,8 @@ proc setEncoding(self: SqLite, encoding: string): bool =
   ###
   ### sets the encoding of a database connection, returns true for success, false for failure
   ###
+  if not self.connected:
+    return false
   return self.conn.setEncoding(encoding)
 
 proc getDbInfo*(self: SqLite): DbInfo =
@@ -218,10 +230,13 @@ proc close*(self: SqLite) =
     self.conn.close
   except:
     discard
+  self.connected = false
 
 # test ping the server
 proc ping*(self: SqLite): bool =
   try:
+    if not self.connected:
+      return self.connected
     self.conn.exec(sql "SELECT 1")
     result = true
   except:
