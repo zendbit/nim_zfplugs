@@ -67,25 +67,24 @@ proc newPgSql*(connId: string): PgSql =
 
 # insert into database
 proc insertId*(
-  self: PgSql, tbl: string, keyValues: openArray[tuple[k: string, v: string]]
+  self: PgSql, tbl: string, keyValues: JsonNode
   ): tuple[ok: bool, insertId: int64, msg: string] =
   try:
     var sqlStr = "INSERT INTO"
     var keys: seq[string] = @[]
     var values: seq[string] = @[]
     var valuesParam: seq[string] = @[]
-    for kv in keyValues:
-      let k = kv[0]
-      let v = kv[1]
+    for k, v in keyValues:
       keys.add(k)
-      if v.toLower == "nil" or
-        v.toLower == "null" or
-        v.toLower == ($dbNull).toLower:
+      if v.kind == JNUll:
          values.add("NULL")
       else:
         values.add("?")
-        valuesParam.add(v)
-
+        if v.kind != JString:
+          valuesParam.add($v)
+        else:
+          valuesParam.add(v.getStr)
+    echo &"""{sqlStr} {tbl} ({keys.join(",")}) VALUES ({values.join(",")})"""
     return (true,
       self.conn.insertId(sql &"""{sqlStr} {tbl} ({keys.join(",")}) VALUES ({values.join(",")})""", valuesParam),
       "ok")
@@ -93,25 +92,24 @@ proc insertId*(
     return (false, 0'i64, ex.msg)
 
 proc update*(
-  self: PgSql, tbl: string, keyValues: openArray[tuple[k: string, v: string]],
+  self: PgSql, tbl: string, keyValues: JsonNode,
   stmt: string, params: varargs[string, `$`]): tuple[ok: bool, affected: int64, msg: string] =
   ### update data table
   try:
     var sqlStr = "UPDATE"
     var setVal: seq[string] = @[]
     var setValParam: seq[string] = @[]
-    for kv in keyValues:
-      let k = kv[0]
-      let v = kv[1]
+    for k, v in keyValues:
       var setValKV: seq[string] = @[]
       setValKV.add(k)
-      if v.toLower == "nil" or
-        v.toLower == "null" or
-        v.toLower == ($dbNull).toLower:
+      if v.kind == JNull:
          setValKV.add("NULL")
       else:
         setValKV.add("?")
-        setValParam.add(v)
+        if v.kind != JString:
+          setValParam.add($v)
+        else:
+          setValParam.add(v.getStr)
       
       setVal.add(setValKV.join("="))
 
@@ -209,6 +207,19 @@ proc execAffectedRows*(
     if not self.connected:
       return (false, 0'i64, "can't connect to the database.")
     return (true, self.conn.execAffectedRows(sql query, args), "ok")
+  except Exception as ex:
+    return (false, 0'i64, ex.msg)
+
+proc delete*(
+  self: PgSql, tbl: string, stmt: string, params: varargs[string, `$`]): tuple[ok: bool, affected: int64, msg: string] =
+  ###
+  ### runs the query delete and returns the number of affected rows
+  ###
+  try:
+    if not self.connected:
+      return (false, 0'i64, "can't connect to the database.")
+    var sqlStr = &"DELETE FROM"
+    return (true, self.conn.execAffectedRows(sql &"{sqlStr} {tbl} {stmt}", params), "ok")
   except Exception as ex:
     return (false, 0'i64, ex.msg)
 
