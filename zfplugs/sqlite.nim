@@ -163,7 +163,7 @@ proc getRow*(self: SqLite, tbl: string, fields: openArray[string],
     let sqlStr = &"""SELECT {f} FROM"""
     let queryResult = self.conn.getRow(sql &"{sqlStr} {tbl} {stmt}", params)
     var res = %*{}
-    if queryResult[0] != "":
+    if queryResult.len > 0 and queryResult[0] != "":
       for i in 0..fields.high:
         for k, v in fields[i].toDbType(queryResult[i]):
           var fname = k.toLower()
@@ -187,7 +187,7 @@ proc getAllRows*(self: SqLite, tbl: string, fields: openArray[string],
     let sqlStr = &"""SELECT {f} FROM"""
     let queryResult = self.conn.getAllRows(sql &"{sqlStr} {tbl} {stmt}", params)
     var res: seq[JsonNode] = @[]
-    if queryResult[0][0] != "":
+    if queryResult.len > 0 and queryResult[0][0] != "":
       for qres in queryResult:
         var resItem = %*{}
         for i in 0..fields.high:
