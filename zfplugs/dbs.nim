@@ -108,8 +108,12 @@ proc toDbType*(field: string, value: string): JsonNode =
       case data[1]
       of "int":
         result[data[0]] = %value.tryParseInt().val
+      of "uInt":
+        result[data[0]] = %value.tryParseUInt().val
       of "bigInt":
         result[data[0]] = %value.tryParseBiggestInt().val
+      of "bigUInt":
+        result[data[0]] = %value.tryParseBiggestUInt().val
       of "float":
         result[data[0]] = %value.tryParseFloat().val
       of "bigFloat":
