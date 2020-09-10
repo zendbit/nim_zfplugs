@@ -122,3 +122,16 @@ proc toDbType*(field: string, value: string): JsonNode =
         result[data[0]] = %value.tryParseBool().val
   elif value != "":
     result[data[0]] = %value
+
+proc toDbType*(field: string, nodeKind: JsonNodeKind, value: string): JsonNode =
+  result = %*{field: nil}
+  if value != "":
+    case nodeKind
+    of JInt:
+      result[field] = %value.tryParseBiggestInt().val
+    of JFloat:
+      result[field] = %value.tryParseFloat().val
+    of JBool:
+      result[field] = %value.tryParseBool().val
+    else:
+      result[field] = %value

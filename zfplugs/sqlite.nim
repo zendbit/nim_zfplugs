@@ -8,7 +8,7 @@
 ]#
 
 import db_sqlite, strformat, json
-
+import stdext/[json_ext]
 import dbs, settings
 
 type
@@ -138,7 +138,7 @@ proc dbQuote*(s: string): string =
   ###
   return dbQuote(s)
 
-proc exec*(self: SqLite, query: string, args: varargs[string, `$`]): tuple[ok: bool, msg: string] =
+proc exec*(self: SqLite, query: string, args: varargs[string, `$`] = []): tuple[ok: bool, msg: string] =
   ###
   ### execute the query
   ###
@@ -174,6 +174,31 @@ proc getRow*(self: SqLite, tbl: string, fields: openArray[string],
   except Exception as ex:
     return (false, nil, ex.msg)
 
+proc getRow*(
+  self: SqLite,
+  tbl: string,
+  j: JsonNode,
+  stmt: string = "",
+  params: varargs[string, `$`] = []): tuple[ok: bool, row: JsonNode, msg: string] =
+  ###
+  ### Retrieves a single row. If the query doesn't return any rows,
+  ###
+  try:
+    if not self.connected:
+      return (false, nil, "can't connect to the database.")
+    let field = j.fieldsDesc
+    let select = field.map(proc (x: FieldDesc): string = x.name).join(",")
+    let sqlStr = &"""SELECT {select} FROM"""
+    let queryResult = self.conn.getRow(sql &"{sqlStr} {tbl} {stmt}", params)
+    var res = %*{}
+    if queryResult.len > 0 and queryResult[0] != "":
+      for i in 0..field.high:
+        for k, v in field[i].name.toDbType(field[i].nodeKind, queryResult[i]):
+          res[k.toLower()] = v
+    return (true, res, "ok")
+  except Exception as ex:
+    return (false, nil, ex.msg)
+
 proc getAllRows*(self: SqLite, tbl: string, fields: openArray[string],
   stmt: string = "", params: varargs[string, `$`] = []): tuple[ok: bool, rows: JsonNode, msg: string] =
   ###
@@ -201,8 +226,36 @@ proc getAllRows*(self: SqLite, tbl: string, fields: openArray[string],
   except Exception as ex:
     return (false, nil, ex.msg)
 
+proc getAllRows*(
+  self: SqLite,
+  tbl: string,
+  j: JsonNode,
+  stmt: string = "",
+  params: varargs[string, `$`] = []): tuple[ok: bool, rows: JsonNode, msg: string] =
+  ###
+  ### Retrieves a single row. If the query doesn't return any rows,
+  ###
+  try:
+    if not self.connected:
+      return (false, nil, "can't connect to the database.")
+    let field = j.fieldsDesc
+    let select = field.map(proc (x: FieldDesc): string = x.name).join(",")
+    let sqlStr = &"""SELECT {select} FROM"""
+    let queryResult = self.conn.getAllRows(sql &"{sqlStr} {tbl} {stmt}", params)
+    var res: seq[JsonNode] = @[]
+    if queryResult.len > 0 and queryResult[0][0] != "":
+      for qres in queryResult:
+        var resItem = %*{}
+        for i in 0..field.high:
+          for k, v in field[i].name.toDbType(field[i].nodeKind, qres[i]):
+            resItem[k.toLower()] = v
+        res.add(resItem)
+    return (true, %res, "ok")
+  except Exception as ex:
+    return (false, nil, ex.msg)
+
 proc execAffectedRows*(
-  self: SqLite, query: string, args: varargs[string, `$`]): tuple[ok: bool, affected: int64, msg: string] =
+  self: SqLite, query: string, args: varargs[string, `$`] = []): tuple[ok: bool, affected: int64, msg: string] =
   ###
   ### runs the query (typically "UPDATE") and returns the number of affected rows
   ###
@@ -214,7 +267,7 @@ proc execAffectedRows*(
     return (false, 0'i64, ex.msg)
 
 proc delete*(
-  self: SqLite, tbl: string, stmt: string, params: varargs[string, `$`]): tuple[ok: bool, affected: int64, msg: string] =
+  self: SqLite, tbl: string, stmt: string, params: varargs[string, `$`] = []): tuple[ok: bool, affected: int64, msg: string] =
   ###
   ### runs the query delete and returns the number of affected rows
   ###
