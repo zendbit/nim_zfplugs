@@ -176,7 +176,7 @@ proc getRow*(self: PgSql, tbl: string, fields: openArray[string],
 proc getRow*(
   self: PgSql,
   tbl: string,
-  j: JsonNode,
+  fieldsDesc: openArray[FieldDesc],
   stmt: string = "",
   params: varargs[string, `$`] = []): tuple[ok: bool, row: JsonNode, msg: string] =
   ###
@@ -185,15 +185,17 @@ proc getRow*(
   try:
     if not self.connected:
       return (false, nil, "can't connect to the database.")
-    let field = j.fieldsDesc
-    let select = field.map(proc (x: FieldDesc): string = x.name).join(",")
+    let select = fieldsDesc.map(proc (x: FieldDesc): string = x.name).join(",")
     let sqlStr = &"""SELECT {select} FROM"""
     let queryResult = self.conn.getRow(sql &"{sqlStr} {tbl} {stmt}", params)
     var res = %*{}
     if queryResult.len > 0 and queryResult[0] != "":
-      for i in 0..field.high:
-        for k, v in field[i].name.toDbType(field[i].nodeKind, queryResult[i]):
-          res[k.toLower()] = v
+      for i in 0..fieldsDesc.high:
+        for k, v in fieldsDesc[i].name.toDbType(fieldsDesc[i].nodeKind, queryResult[i]):
+          var fname = k.toLower()
+          if fname.contains(" as "):
+            fname = fname.split(" as ")[1].strip
+          res[fname] = v
     return (true, res, "ok")
   except Exception as ex:
     return (false, nil, ex.msg)
@@ -228,7 +230,7 @@ proc getAllRows*(self: PgSql, tbl: string, fields: openArray[string],
 proc getAllRows*(
   self: PgSql,
   tbl: string,
-  j: JsonNode,
+  fieldsDesc: openArray[FieldDesc],
   stmt: string = "",
   params: varargs[string, `$`] = []): tuple[ok: bool, rows: JsonNode, msg: string] =
   ###
@@ -237,17 +239,19 @@ proc getAllRows*(
   try:
     if not self.connected:
       return (false, nil, "can't connect to the database.")
-    let field = j.fieldsDesc
-    let select = field.map(proc (x: FieldDesc): string = x.name).join(",")
+    let select = fieldsDesc.map(proc (x: FieldDesc): string = x.name).join(",")
     let sqlStr = &"""SELECT {select} FROM"""
     let queryResult = self.conn.getAllRows(sql &"{sqlStr} {tbl} {stmt}", params)
     var res: seq[JsonNode] = @[]
     if queryResult.len > 0 and queryResult[0][0] != "":
       for qres in queryResult:
         var resItem = %*{}
-        for i in 0..field.high:
-          for k, v in field[i].name.toDbType(field[i].nodeKind, qres[i]):
-            resItem[k.toLower()] = v
+        for i in 0..fieldsDesc.high:
+          for k, v in fieldsDesc[i].name.toDbType(fieldsDesc[i].nodeKind, qres[i]):
+            var fname = k.toLower()
+            if fname.contains(" as "):
+              fname = fname.split(" as ")[1].strip
+            resItem[fname] = v
         res.add(resItem)
     return (true, %res, "ok")
   except Exception as ex:
