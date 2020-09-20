@@ -8,7 +8,7 @@
 ]#
 
 import db_postgres, db_mysql, db_sqlite, strformat, json, strutils
-import stdext/[strutils_ext]
+import stdext/[strutilsExt]
 
 type
   Dbs* = ref object

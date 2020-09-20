@@ -8,7 +8,7 @@
 ]#
 
 import db_sqlite, strformat, json
-import stdext/[json_ext]
+import stdext/[jsonExt]
 import dbs, settings
 
 type

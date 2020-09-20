@@ -9,7 +9,7 @@
 
 import db_mysql, strformat, strutils, sequtils, json
 export db_mysql
-import stdext/[json_ext]
+import stdext/[jsonExt]
 import dbs, settings
 export dbs
 
