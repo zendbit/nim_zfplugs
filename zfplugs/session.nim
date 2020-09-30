@@ -8,7 +8,7 @@
 ]#
 
 import std/sha1, macros
-import zfcore, stdext.encryptExt
+import zfcore, stdext.encrypt_ext
 
 const sessid = "_zfsid"
 

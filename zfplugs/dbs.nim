@@ -7,24 +7,29 @@
   Git: https://github.com/zendbit
 ]#
 
-import db_postgres, db_mysql, db_sqlite, strformat, json, strutils
-import stdext/[strutilsExt]
+import db_postgres, db_mysql, db_sqlite, strformat, json, strutils, strformat, options
+import stdext/[strutils_ext]
+export db_postgres, db_mysql, db_sqlite
 
 type
-  Dbs* = ref object
+  MySql* = db_mysql.DbConn
+  PgSql* = db_postgres.DbConn
+  SqLite* = db_sqlite.DbConn
+
+  Dbs*[T] = ref object
     database: string
     username: string
     password: string
     host: string
     port: int
 
-proc newDbs*(
+proc newDbs2*[T](
   database: string,
   username: string = "",
   password: string = "",
   host: string = "",
-  port: int = 0): Dbs =
-  let instance = Dbs(
+  port: int = 0): Dbs[T] =
+  let instance = Dbs[T](
     database: database,
     username: username,
     password: password,
@@ -34,71 +39,53 @@ proc newDbs*(
 
   return instance
 
-proc tryPgSqlConn*(self: Dbs): tuple[success: bool, conn: db_postgres.DbConn, msg: string] =
-    try:
-      result = (
-        true,
-          db_postgres.open(
-          &"{self.host}:{self.port}",
-          self.username,
-          self.password,
-          self.database),
-        "OK")
-    except Exception as ex:
-      result = (false, nil, ex.msg)
-
-proc tryPgSqlCheck*(self: Dbs): tuple[success: bool, msg: string] =
-    try:
-      let c = self.tryPgSqlConn()
-      if c.success:
-        c.conn.close()
-      return (true, "OK")
-    except Exception as ex:
-      result = (false, ex.msg)
-
-proc tryMySqlConn*(self: Dbs): tuple[success: bool, conn: db_mysql.DbConn, msg: string] =
-    try:
-      result = (
-        true,
-        db_mysql.open(
-          &"{self.host}:{self.port}",
-          self.username,
-          self.password,
-          self.database),
-        "OK")
-    except Exception as ex:
-      result = (false, nil, ex.msg)
-
-proc tryMySqlCheck*(self: Dbs): tuple[success: bool, msg: string] =
-    try:
-      let c = self.tryMySqlConn()
-      if c.success:
-        c.conn.close()
-      return (true, "OK")
-    except Exception as ex:
-      result = (false, ex.msg)
-
-proc trySqliteConn*(self: Dbs): tuple[success: bool, conn: db_sqlite.DbConn, msg: string] =
+proc tryConnect*[T](self: Dbs[T]): tuple[success: bool, conn: T, msg: string] =
+  ##
+  ## Try connect to database
+  ## Generic T is type of MySql, PgSql, SqLite
+  ##
   try:
-    result = (
-      true,
-      db_sqlite.open(
-        self.database,
-        "",
-        "",
-        ""),
-      "OK")
+    if T is PgSql:
+      result = (
+        true,
+        cast[T](db_postgres.open(
+          &"{self.host}:{self.port}",
+          self.username,
+          self.password,
+          self.database)),
+        "OK")
+    elif T is MySql:
+      result = (
+        true,
+        cast[T](db_mysql.open(
+          &"{self.host}:{self.port}",
+          self.username,
+          self.password,
+          self.database)),
+        "OK")
+    elif T is SqLite:
+      result = (
+        true,
+        cast[T](db_sqlite.open(
+          self.database,
+          "",
+          "",
+          "")),
+        "OK")
+    else:
+      let dbType = $(type T)
+      raise newException(ObjectConversionError, &"unknown database type {dbType}")
   except Exception as ex:
     result = (false, nil, ex.msg)
 
-proc trySqliteCheck*(self: Dbs): tuple[success: bool, msg: string] =
-    try:
-      let c = self.trySqliteConn()
-      if c.success:
-        c.conn.close()
-      return (true, "OK")
-    except Exception as ex:
-      result = (false, ex.msg)
+proc tryCheckConnect*[T](self: Dbs[T]): tuple[success: bool, msg: string] =
+  try:
+    var c = self.tryConnect[T]()
+    if c.success:
+      c.conn.get().close
+    return (true, "OK")
+  except Exception as ex:
+    result = (false, ex.msg)
 
 proc toDbType*(field: string, value: string): JsonNode =
   let data = field.split(":")
@@ -135,3 +122,13 @@ proc toDbType*(field: string, nodeKind: JsonNodeKind, value: string): JsonNode =
       result[field] = %value.tryParseBool().val
     else:
       result[field] = %value
+
+proc toWhereQuery*(j: JsonNode, op: string = "AND"): tuple[where: string, params: seq[string]] =
+  var where: seq[string] = @[]
+  var whereParams: seq[string] = @[]
+  for k, v in j:
+    where.add(&"{k}=?")
+    whereParams.add(if v.kind == JString: v.getStr else: $v)
+
+  return (where.join(&" {op} "), whereParams)
+

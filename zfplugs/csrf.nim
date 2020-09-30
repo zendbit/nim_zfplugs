@@ -10,7 +10,7 @@
 # csrf generator and manager
 import dbs, db_sqlite, times, std/sha1, os, strutils, asyncdispatch
 import zfcore
-from stdext.encryptExt import xorEncodeDecode
+from stdext.encrypt_ext import xorEncodeDecode
 
 let csrfDir = zfcoreInstance.settings.tmpDir.joinPath("csrf")
 if not csrfDir.existsDir:

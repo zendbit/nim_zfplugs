@@ -7,16 +7,22 @@
   Git: https://github.com/zendbit
 ]#
 
-import db_postgres, strformat, json
-import stdext/[jsonExt]
+import strformat, strutils, sequtils, json, options
+import stdext/[json_ext]
 import dbs, settings
+export dbs
 
 type
-  DbInfo* = tuple[database: string, username: string, password: string, host: string, port: int]
-  PgSql* = ref object
+  DbInfo* = tuple[
+    database: string,
+    username: string,
+    password: string,
+    host: string, port: int]
+
+  DBMS*[T] = ref object
     connId: string
     dbInfo: DbInfo
-    conn: DbConn
+    conn: T
     connected: bool
 
 #var db: DBConn
@@ -33,26 +39,27 @@ type
 #   }
 # }
 #
-proc newPgSql*(connId: string): PgSql =
+proc newDBMS*[T](connId: string): DBMS[T] =
   let jsonSettings = jsonSettings()
   if not jsonSettings.isNil:
     let db = jsonSettings{"database"}
     if not db.isNil:
       let dbConf = db{connId}
       if not dbConf.isNil:
-        result = PgSql(connId: connId)
+        result = DBMS[T](connId: connId)
         result.dbInfo = (
           dbConf{"database"}.getStr(),
           dbConf{"username"}.getStr(),
           dbConf{"password"}.getStr(),
           dbConf{"host"}.getStr(),
           dbConf{"port"}.getInt())
-        let c = newDbs(
+        let c = newDbs2[T](
           result.dbInfo.database,
           result.dbInfo.username,
           result.dbInfo.password,
           result.dbInfo.host,
-          result.dbInfo.port).tryPgSqlConn()
+          result.dbInfo.port).tryConnect()
+
         result.connected = c.success
         if c.success:
           result.conn = c.conn
@@ -67,14 +74,15 @@ proc newPgSql*(connId: string): PgSql =
 
 # insert into database
 proc insertId*(
-  self: PgSql, tbl: string, keyValues: JsonNode
-  ): tuple[ok: bool, insertId: int64, msg: string] =
+  self: DBMS,
+  tbl: string,
+  data: JsonNode): tuple[ok: bool, insertId: int64, msg: string] =
   try:
     var sqlStr = "INSERT INTO"
     var keys: seq[string] = @[]
     var values: seq[string] = @[]
     var valuesParam: seq[string] = @[]
-    for k, v in keyValues:
+    for k, v in data:
       keys.add(k)
       if v.kind == JNUll:
          values.add("NULL")
@@ -84,23 +92,24 @@ proc insertId*(
           valuesParam.add($v)
         else:
           valuesParam.add(v.getStr)
-
+    
     return (true,
       self.conn.insertId(sql &"""{sqlStr} {tbl} ({keys.join(",")}) VALUES ({values.join(",")})""", valuesParam),
       "ok")
-
   except Exception as ex:
     return (false, 0'i64, ex.msg)
 
 proc update*(
-  self: PgSql, tbl: string, keyValues: JsonNode,
+  self: DBMS,
+  tbl: string,
+  data: JsonNode,
   stmt: string, params: varargs[string, `$`]): tuple[ok: bool, affected: int64, msg: string] =
   ### update data table
   try:
     var sqlStr = "UPDATE"
     var setVal: seq[string] = @[]
     var setValParam: seq[string] = @[]
-    for k, v in keyValues:
+    for k, v in data:
       var setValKV: seq[string] = @[]
       setValKV.add(k)
       if v.kind == JNull:
@@ -117,15 +126,14 @@ proc update*(
     # add where param
     for wParams in params:
       setValParam.add(wParams)
-
+    
     return (true,
       self.conn.execAffectedRows(sql &"""{sqlStr} {tbl} SET {setVal.join(",")} {stmt}""", setValParam),
       "ok")
-
   except Exception as ex:
     return (false, 0'i64, ex.msg)
 
-proc dbError*(self: PgSql) =
+proc dbError*(self: DBMS) =
   ###
   ### Raise DbError exception
   ###
@@ -137,7 +145,10 @@ proc dbQuote*(s: string): string =
   ###
   return dbQuote(s)
 
-proc exec*(self: PgSql, query: string, args: varargs[string, `$`] = []): tuple[ok: bool, msg: string] =
+proc exec*(
+  self: DBMS,
+  query: string,
+  args: varargs[string, `$`] = []): tuple[ok: bool, msg: string] =
   ###
   ### execute the query
   ###
@@ -149,39 +160,12 @@ proc exec*(self: PgSql, query: string, args: varargs[string, `$`] = []): tuple[o
   except Exception as ex:
     return (false, ex.msg)
 
-proc getRow*(self: PgSql, tbl: string, fields: openArray[string],
-  stmt: string = "", params: varargs[string, `$`] = []): tuple[ok: bool, row: JsonNode, msg: string] =
-  ###
-  ### Retrieves a single row. If the query doesn't return any rows,
-  ### this proc will return a Row with empty strings for each column
-  ###
-  try:
-    if not self.connected:
-      return (false, nil, "can't connect to the database.")
-    let f = fields.map(proc (x: string): string = (x.split(":"))[0]).join(",")
-    let sqlStr = &"""SELECT {f} FROM"""
-    let queryResult = self.conn.getRow(sql &"{sqlStr} {tbl} {stmt}", params)
-    var res = %*{}
-    if queryResult.len > 0 and queryResult[0] != "":
-      for i in 0..fields.high:
-        for k, v in fields[i].toDbType(queryResult[i]):
-          var fname = k.toLower()
-          if fname.contains(" as "):
-            fname = fname.split(" as ")[1].strip
-          res[fname] = v
-    return (true, res, "ok")
-  except Exception as ex:
-    return (false, nil, ex.msg)
-
 proc getRow*(
-  self: PgSql,
+  self: DBMS,
   tbl: string,
   fieldsDesc: openArray[FieldDesc],
   stmt: string = "",
   params: varargs[string, `$`] = []): tuple[ok: bool, row: JsonNode, msg: string] =
-  ###
-  ### Retrieves a single row. If the query doesn't return any rows,
-  ###
   try:
     if not self.connected:
       return (false, nil, "can't connect to the database.")
@@ -200,45 +184,18 @@ proc getRow*(
   except Exception as ex:
     return (false, nil, ex.msg)
 
-proc getAllRows*(self: PgSql, tbl: string, fields: openArray[string],
-  stmt: string = "", params: varargs[string, `$`] = []): tuple[ok: bool, rows: JsonNode, msg: string] =
-  ###
-  ### Retrieves a single row. If the query doesn't return any rows,
-  ### this proc will return a Row with empty strings for each column
-  ###
-  try:
-    if not self.connected:
-      return (false, nil, "can't connect to the database.")
-    let f = fields.map(proc (x: string): string = (x.split(":"))[0]).join(",")
-    let sqlStr = &"""SELECT {f} FROM"""
-    let queryResult = self.conn.getAllRows(sql &"{sqlStr} {tbl} {stmt}", params)
-    var res: seq[JsonNode] = @[]
-    if queryResult.len > 0 and queryResult[0][0] != "":
-      for qres in queryResult:
-        var resItem = %*{}
-        for i in 0..fields.high:
-          for k, v in fields[i].toDbType(qres[i]):
-            var fname = k.toLower()
-            if fname.contains(" as "):
-              fname = fname.split(" as ")[1].strip
-            resItem[fname] = v
-        res.add(resItem)
-    return (true, %res, "ok")
-  except Exception as ex:
-    return (false, nil, ex.msg)
-
 proc getAllRows*(
-  self: PgSql,
+  self: DBMS,
   tbl: string,
   fieldsDesc: openArray[FieldDesc],
   stmt: string = "",
-  params: varargs[string, `$`] = []): tuple[ok: bool, rows: JsonNode, msg: string] =
+  params: varargs[string, `$`] = []): tuple[ok: bool, rows: seq[JsonNode], msg: string] =
   ###
   ### Retrieves a single row. If the query doesn't return any rows,
   ###
   try:
     if not self.connected:
-      return (false, nil, "can't connect to the database.")
+      return (false, @[], "can't connect to the database.")
     let select = fieldsDesc.map(proc (x: FieldDesc): string = x.name).join(",")
     let sqlStr = &"""SELECT {select} FROM"""
     let queryResult = self.conn.getAllRows(sql &"{sqlStr} {tbl} {stmt}", params)
@@ -253,12 +210,14 @@ proc getAllRows*(
               fname = fname.split(" as ")[1].strip
             resItem[fname] = v
         res.add(resItem)
-    return (true, %res, "ok")
+    return (true, res, "ok")
   except Exception as ex:
-    return (false, nil, ex.msg)
+    return (false, @[], ex.msg)
 
 proc execAffectedRows*(
-  self: PgSql, query: string, args: varargs[string, `$`] = []): tuple[ok: bool, affected: int64, msg: string] =
+  self: DBMS,
+  query: string,
+  args: varargs[string, `$`] = []): tuple[ok: bool, affected: int64, msg: string] =
   ###
   ### runs the query (typically "UPDATE") and returns the number of affected rows
   ###
@@ -270,7 +229,10 @@ proc execAffectedRows*(
     return (false, 0'i64, ex.msg)
 
 proc delete*(
-  self: PgSql, tbl: string, stmt: string, params: varargs[string, `$`] = []): tuple[ok: bool, affected: int64, msg: string] =
+  self: DBMS,
+  tbl: string,
+  stmt: string,
+  params: varargs[string, `$`] = []): tuple[ok: bool, affected: int64, msg: string] =
   ###
   ### runs the query delete and returns the number of affected rows
   ###
@@ -282,7 +244,9 @@ proc delete*(
   except Exception as ex:
     return (false, 0'i64, ex.msg)
 
-proc setEncoding(self: PgSql, encoding: string): bool =
+proc setEncoding(
+  self: DBMS,
+  encoding: string): bool =
   ###
   ### sets the encoding of a database connection, returns true for success, false for failure
   ###
@@ -290,11 +254,11 @@ proc setEncoding(self: PgSql, encoding: string): bool =
     return false
   return self.conn.setEncoding(encoding)
 
-proc getDbInfo*(self: PgSql): DbInfo =
+proc getDbInfo*(self: DBMS): DbInfo =
   return self.dbInfo
 
 # close the database connection
-proc close*(self: PgSql) =
+proc close*(self: DBMS) =
   try:
     self.conn.close
   except:
@@ -302,7 +266,7 @@ proc close*(self: PgSql) =
   self.connected = false
 
 # test ping the server
-proc ping*(self: PgSql): bool =
+proc ping*(self: DBMS): bool =
   try:
     if not self.connected:
       return self.connected
@@ -313,9 +277,7 @@ proc ping*(self: PgSql): bool =
     discard
 
 # get connId
-proc connId*(self: PgSql): string =
+proc connId*(self: DBMS): string =
   if not self.isNil:
     result = self.connId
 
-export
-  db_postgres
