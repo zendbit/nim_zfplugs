@@ -10,7 +10,10 @@
 import base64, strutils, httpcore
 from zfcore import getValues
 
-proc validateBasicAuth*(httpHeaders: HttpHeaders, username: string, password: string): bool =
+proc validateBasicAuth*(
+  httpHeaders: HttpHeaders,
+  username: string,
+  password: string): bool =
   let auth = httpHeaders.getValues("Authorization").split(" ")
   if auth.len() == 2:
     let userPass = auth[1].decode().split(":")

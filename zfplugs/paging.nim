@@ -9,7 +9,12 @@
 
 import uri3, json, math, strutils
 
-proc genPaging*(data: JsonNode, url: Uri3, perPage: int64, numData: int64): JsonNode =
+proc genPaging*(
+  data: JsonNode,
+  url: Uri3,
+  perPage: int64,
+  numData: int64): JsonNode =
+
   let limit = url.getQuery("perPage", "20").parseBiggestInt
   let currentPage = url.getQuery("page", "1").parseBiggestInt
   result = %*{

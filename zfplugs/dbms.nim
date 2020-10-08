@@ -9,8 +9,8 @@
 
 import strformat, strutils, sequtils, json, options
 import stdext/[json_ext]
-import dbs, settings
-export dbs
+import dbs, settings, dbssql
+export dbs, dbs_sql
 
 type
   DbInfo* = tuple[
@@ -53,7 +53,7 @@ proc newDBMS*[T](connId: string): DBMS[T] =
           dbConf{"password"}.getStr(),
           dbConf{"host"}.getStr(),
           dbConf{"port"}.getInt())
-        let c = newDbs2[T](
+        let c = newDbs[T](
           result.dbInfo.database,
           result.dbInfo.username,
           result.dbInfo.password,
@@ -72,63 +72,62 @@ proc newDBMS*[T](connId: string): DBMS[T] =
     else:
       echo "database section not found!!."
 
-# insert into database
-proc insertId*(
+proc extractKeyValue[T](
   self: DBMS,
-  tbl: string,
-  data: JsonNode): tuple[ok: bool, insertId: int64, msg: string] =
+  obj: T): tuple[keys: seq[string], values: seq[string]] =
+  var keys: seq[string] = @[]
+  var values: seq[string] = @[]
+  let obj = %obj
+  for k, v in obj.discardNull:
+    if k.toLower.contains("-as-"): continue
+    
+    var skip = false
+    for kf in obj.keys:
+      if kf.toLower.endsWith(&"as-{k}"):
+        skip = true
+        break
+    if skip: continue
+
+    keys.add(k)
+    if v.kind != JString:
+      values.add($v)
+    else:
+      values.add(v.getStr)
+
+  return (keys, values)
+
+# insert into database
+proc insertId*[T](
+  self: DBMS,
+  table: string,
+  obj: T): tuple[ok: bool, insertId: int64, msg: string] =
   try:
-    var sqlStr = "INSERT INTO"
-    var keys: seq[string] = @[]
-    var values: seq[string] = @[]
-    var valuesParam: seq[string] = @[]
-    for k, v in data:
-      keys.add(k)
-      if v.kind == JNUll:
-         values.add("NULL")
-      else:
-        values.add("?")
-        if v.kind != JString:
-          valuesParam.add($v)
-        else:
-          valuesParam.add(v.getStr)
+    let kv = self.extractKeyValue(obj)
+    let q = Sql().insert(
+        table,
+        kv.keys.map(proc (x: string): string = "?"))
+      .value(kv.values).toQ
     
     return (true,
-      self.conn.insertId(sql &"""{sqlStr} {tbl} ({keys.join(",")}) VALUES ({values.join(",")})""", valuesParam),
+      self.conn.insertId(q.query, q.params),
       "ok")
   except Exception as ex:
     return (false, 0'i64, ex.msg)
 
-proc update*(
+proc update*[T](
   self: DBMS,
-  tbl: string,
-  data: JsonNode,
-  stmt: string, params: varargs[string, `$`]): tuple[ok: bool, affected: int64, msg: string] =
+  table: string,
+  obj: T,
+  query: Sql): tuple[ok: bool, affected: int64, msg: string] =
   ### update data table
   try:
-    var sqlStr = "UPDATE"
-    var setVal: seq[string] = @[]
-    var setValParam: seq[string] = @[]
-    for k, v in data:
-      var setValKV: seq[string] = @[]
-      setValKV.add(k)
-      if v.kind == JNull:
-         setValKV.add("NULL")
-      else:
-        setValKV.add("?")
-        if v.kind != JString:
-          setValParam.add($v)
-        else:
-          setValParam.add(v.getStr)
-      
-      setVal.add(setValKV.join("="))
-
-    # add where param
-    for wParams in params:
-      setValParam.add(wParams)
-    
+    let kv = self.extractKeyValue(obj)
+    let q = (Sql()
+      .update(table, kv.keys)
+      .value(kv.values) & query).toQ
+     
     return (true,
-      self.conn.execAffectedRows(sql &"""{sqlStr} {tbl} SET {setVal.join(",")} {stmt}""", setValParam),
+      self.conn.execAffectedRows(q.query, q.params),
       "ok")
   except Exception as ex:
     return (false, 0'i64, ex.msg)
@@ -147,100 +146,116 @@ proc dbQuote*(s: string): string =
 
 proc exec*(
   self: DBMS,
-  query: string,
-  args: varargs[string, `$`] = []): tuple[ok: bool, msg: string] =
+  query: Sql): tuple[ok: bool, msg: string] =
   ###
   ### execute the query
   ###
   try:
     if not self.connected:
       return (false, "can't connect to the database.")
-    self.conn.exec(sql query, args)
+    let q = query.toQ
+    self.conn.exec(q.query, q.params)
     return (true, "ok")
   except Exception as ex:
     return (false, ex.msg)
 
-proc getRow*(
+proc extractFieldsAlias(fields: seq[FieldDesc]): seq[FieldDesc] =
+  let fields = fields.map(proc (x: FieldDesc): FieldDesc =
+    (x.name.replace("-as-", " AS ").replace("-AS-", " AS "), x.nodeKind))
+  
+  return fields.filter(proc (x: FieldDesc): bool =
+    result = true
+    if not x.name.contains("AS "):
+      for f in fields:
+        if f.name.contains(&" AS {x.name}"):
+          result = false
+          break)
+
+proc extractQueryResults(fields: seq[FieldDesc], queryResults: seq[string]): JsonNode =
+  result = %*{}
+  if queryResults.len > 0 and queryResults[0] != "":
+    for i in 0..fields.high:
+      for k, v in fields[i].name.toDbType(fields[i].nodeKind, queryResults[i]):
+        var fprops = k.split(" AS ")
+        result[fprops[fprops.high].strip] = v
+
+proc getRow*[T](
   self: DBMS,
-  tbl: string,
-  fieldsDesc: openArray[FieldDesc],
-  stmt: string = "",
-  params: varargs[string, `$`] = []): tuple[ok: bool, row: JsonNode, msg: string] =
+  table: string,
+  obj: T,
+  query: Sql): tuple[ok: bool, row: T, msg: string] =
+
   try:
     if not self.connected:
-      return (false, nil, "can't connect to the database.")
-    let select = fieldsDesc.map(proc (x: FieldDesc): string = x.name).join(",")
-    let sqlStr = &"""SELECT {select} FROM"""
-    let queryResult = self.conn.getRow(sql &"{sqlStr} {tbl} {stmt}", params)
-    var res = %*{}
-    if queryResult.len > 0 and queryResult[0] != "":
-      for i in 0..fieldsDesc.high:
-        for k, v in fieldsDesc[i].name.toDbType(fieldsDesc[i].nodeKind, queryResult[i]):
-          var fname = k.toLower()
-          if fname.contains(" as "):
-            fname = fname.split(" as ")[1].strip
-          res[fname] = v
-    return (true, res, "ok")
-  except Exception as ex:
-    return (false, nil, ex.msg)
+      return (false, obj, "can't connect to the database.")
 
-proc getAllRows*(
+    let fields = extractFieldsAlias(obj.fieldsDesc)
+    let q = (Sql()
+      .select(fields.map(proc(x: FieldDesc): string = x.name))
+      .fromTable(table) & query).toQ
+    
+    let queryResults = self.conn.getRow(q.query, q.params)
+    return (true, extractQueryResults(fields, queryResults).to(T), "ok")
+  except Exception as ex:
+    return (false, obj, ex.msg)
+
+proc getAllRows*[T](
   self: DBMS,
-  tbl: string,
-  fieldsDesc: openArray[FieldDesc],
-  stmt: string = "",
-  params: varargs[string, `$`] = []): tuple[ok: bool, rows: seq[JsonNode], msg: string] =
+  table: string,
+  obj: T,
+  query: Sql): tuple[ok: bool, rows: seq[T], msg: string] =
   ###
   ### Retrieves a single row. If the query doesn't return any rows,
   ###
   try:
     if not self.connected:
       return (false, @[], "can't connect to the database.")
-    let select = fieldsDesc.map(proc (x: FieldDesc): string = x.name).join(",")
-    let sqlStr = &"""SELECT {select} FROM"""
-    let queryResult = self.conn.getAllRows(sql &"{sqlStr} {tbl} {stmt}", params)
-    var res: seq[JsonNode] = @[]
-    if queryResult.len > 0 and queryResult[0][0] != "":
-      for qres in queryResult:
-        var resItem = %*{}
-        for i in 0..fieldsDesc.high:
-          for k, v in fieldsDesc[i].name.toDbType(fieldsDesc[i].nodeKind, qres[i]):
-            var fname = k.toLower()
-            if fname.contains(" as "):
-              fname = fname.split(" as ")[1].strip
-            resItem[fname] = v
-        res.add(resItem)
+    
+    let fields = extractFieldsAlias(obj.fieldsDesc)
+    let q = (Sql()
+      .select(fields.map(proc(x: FieldDesc): string = x.name))
+      .fromTable(table) & query).toQ
+
+    let queryResults = self.conn.getAllRows(q.query, q.params)
+    var res: seq[T] = @[]
+    if queryResults.len > 0 and queryResults[0][0] != "":
+      for qres in queryResults:
+        res.add(extractQueryResults(fields, qres).to(T))
     return (true, res, "ok")
   except Exception as ex:
     return (false, @[], ex.msg)
 
 proc execAffectedRows*(
   self: DBMS,
-  query: string,
-  args: varargs[string, `$`] = []): tuple[ok: bool, affected: int64, msg: string] =
+  query: Sql): tuple[ok: bool, affected: int64, msg: string] =
   ###
   ### runs the query (typically "UPDATE") and returns the number of affected rows
   ###
   try:
     if not self.connected:
       return (false, 0'i64, "can't connect to the database.")
-    return (true, self.conn.execAffectedRows(sql query, args), "ok")
+    let q = query.toQ
+    return (true, self.conn.execAffectedRows(q.query, q.params), "ok")
   except Exception as ex:
     return (false, 0'i64, ex.msg)
 
-proc delete*(
+proc delete*[T](
   self: DBMS,
-  tbl: string,
-  stmt: string,
-  params: varargs[string, `$`] = []): tuple[ok: bool, affected: int64, msg: string] =
+  table: string,
+  obj: T,
+  query: Sql): tuple[ok: bool, affected: int64, msg: string] =
   ###
   ### runs the query delete and returns the number of affected rows
   ###
   try:
     if not self.connected:
       return (false, 0'i64, "can't connect to the database.")
-    var sqlStr = &"DELETE FROM"
-    return (true, self.conn.execAffectedRows(sql &"{sqlStr} {tbl} {stmt}", params), "ok")
+
+    let w = obj.toWhereQuery
+    let q = (Sql()
+      .delete(table)
+      .where(w.where, w.params) & query).toQ
+    return (true, self.conn.execAffectedRows(q.query, q.params), "ok")
   except Exception as ex:
     return (false, 0'i64, ex.msg)
 

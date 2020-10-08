@@ -12,7 +12,7 @@ import zfcore
 
 # thead safe
 var settings {.threadvar.}: Settings
-deepCopy(settings, zfcoreInstance.settings)
+settings.deepCopy(zfcoreInstance.settings)
 
 proc jsonSettings*(): JsonNode {.gcsafe.} =
   let jsonSettingsFile = joinPath(getAppDir(), "settings.json")

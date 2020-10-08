@@ -26,7 +26,9 @@ proc isSessionExists(sessionToken: string): bool =
   #
   return sessionDir.joinPath(sessionToken).existsFile
 
-proc writeSession(sessionToken: string, data: JsonNode): bool {.discardable.} =
+proc writeSession(
+  sessionToken: string,
+  data: JsonNode): bool {.discardable.} =
   #
   # write session data with given session token and data
   #
@@ -61,7 +63,9 @@ proc readSession(sessionToken: string): JsonNode =
     result = f.readAll().xorEncodeDecode(sessionToken).parseJson
     f.close
 
-proc getSession*(ctx: HttpContext, key: string): JsonNode =
+proc getSession*(
+  ctx: HttpContext,
+  key: string): JsonNode =
   #
   # get session value with given session token and key
   #
@@ -69,7 +73,9 @@ proc getSession*(ctx: HttpContext, key: string): JsonNode =
   if not sessionData.isNil:
     result = sessionData{key}
 
-proc addSession*(ctx: HttpContext, key: string, value: JsonNode) =
+proc addSession*(
+  ctx: HttpContext,
+  key: string, value: JsonNode) =
   #
   # add session
   #
@@ -87,7 +93,9 @@ proc addSession*(ctx: HttpContext, key: string, value: JsonNode) =
     sessionData[key] = value
     token.writeSession(sessionData)
 
-proc deleteSession*(ctx: HttpContext, key: string) =
+proc deleteSession*(
+  ctx: HttpContext,
+  key: string) =
   #
   # delete session value with given session token and key
   #
@@ -107,7 +115,9 @@ proc destroySession*(ctx: HttpContext) =
     cookie.del(sessid)
     ctx.setCookie(cookie)
 
-macro addSession*(key: string, value: JsonNode) =
+macro addSession*(
+  key: string,
+  value: JsonNode) =
   nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),

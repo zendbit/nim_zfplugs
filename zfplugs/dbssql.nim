@@ -1,23 +1,100 @@
-import db_common, sequtils, strformat, strutils
+import db_common, sequtils, strformat, strutils, json
+import stdext/[strutils_ext]
 
 type
   Sql* = ref object
+    fields: seq[string]
     stmt: seq[string]
     params: seq[string]
 
-proc toQ*(self: Sql): tuple[query: SqlQuery, params: seq[string]] =
+proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[string]] =
   
-  return (sql self.stmt.join(" "), self.params)
+  return (self.fields, sql self.stmt.join(" "), self.params)
 
-proc toQs*(self: Sql): tuple[query: string, params: seq[string]] =
+proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[string]] =
   
-  return (self.stmt.join(" "), self.params)
+  return (self.fields, self.stmt.join(" "), self.params)
 
+proc `$`*(self: Sql): string =
+  return $self.toQs
+
+proc `&`*(self: Sql, other: Sql): Sql =
+  if other.stmt.len != 0:
+    self.stmt &= other.stmt
+    self.params &= other.params
+  
+  return self
+
+proc extractFields(
+  self: Sql,
+  fields: openArray[string]): seq[string] =
+
+  return fields.map(proc (x: string): string =
+    let field = x.toLower.split(" as ")
+    result = field[field.high])
+
+#  for f in fields:
+#    var skip: bool
+#    for e in result:
+#      if e.toLower.contains(" as ") and e.endsWith(f):
+#        skip = true
+#        break
+#
+#    if not skip:
+#      result.add(f)
+ 
+#proc extractFieldsAlias(
+#  self: Sql,
+#  fields: openArray[string]): seq[string] =
+  
+#  self.extractFields(fields).map(proc (x: string): string =
+#    let field = x.toLower.split(" as ")
+#    result = field[field.high])
+
+proc sqlTransaction*(sqls: varargs[Sql]): tuple[query: string, params: seq[string]] =
+  var sqlParams: seq[string] = @[]
+  return ((
+    @["BEGIN"] &
+    sqls.map(proc (x: Sql): string =
+      let q = x.toQs
+      sqlParams &= q.params
+      return q.query) &
+    @["COMMIT;"]).join(";"),
+    sqlParams)
+
+proc dropDatabase*(
+  self: Sql,
+  database: string): Sql =
+
+  self.stmt.add(&"DROP DATABASE {database}")
+  return self
+
+proc dropTable*(
+  self: Sql,
+  table: string): Sql =
+
+  self.stmt.add(&"DROP TABLE {table}")
+  return self
+
+proc truncateTable*(
+  self: Sql,
+  table: string): Sql =
+
+  self.stmt.add(&"TRUNCATE TABLE {table}")
+  return self
+
+#### query generator helper
 proc select*(
   self: Sql,
   fields: varargs[string, `$`]): Sql =
   
+  self.fields &= self.extractFields(fields)
+  let fields = fields.map(proc (x: string): string =
+    result = x
+    if not x.toLower.contains(" as "):
+      result = &"{{table}}.{x}")
   self.stmt.add(&"""SELECT {fields.join(", ")}""")
+
   return self
 
 proc select*(
@@ -27,7 +104,10 @@ proc select*(
   
   var fieldsList: seq[string]
   if fields.len > 0:
-    fieldsList &= fields
+    fieldsList &= fields.map(proc (x: string): string =
+      result = x
+      if not x.contains(" AS "):
+        result = &"{{table}}.{x}")
 
   for fq in fieldsQuery:
     let q = fq.query.toQs
@@ -35,6 +115,8 @@ proc select*(
     # add subquery params to query params
     if q.params.len != 0:
       self.params &= q.params
+ 
+  self.fields &= self.extractFields(fieldsList)
 
   self.stmt.add(&"""SELECT {fieldsList.join(", ")}""")
   return self
@@ -44,9 +126,14 @@ proc select*(
   fields: openArray[string],
   fieldsCase: openArray[tuple[caseCond: seq[tuple[cond: string, then: string]], fieldAlias: string]]): Sql =
   
+  let fields = self.fields.map(proc (x: string): string = &"{{table}}.{x}")
+
   var fieldsList: seq[string]
   if fields.len > 0:
-    fieldsList &= fields
+    fieldsList &= fields.map(proc (x: string): string =
+      result = x
+      if not x.contains(" AS "):
+        result = &"{{table}}.{x}")
 
   var caseStmt: seq[string]
   var caseParams: seq[string]
@@ -65,6 +152,8 @@ proc select*(
   if caseStmt.len != 0:
     fieldsList &= caseStmt
 
+  self.fields &= self.extractFields(fieldsList)
+
   if caseParams.len != 0:
     self.params &= caseParams
 
@@ -74,9 +163,11 @@ proc select*(
 
 proc fromTable*(
   self: Sql,
-  tables: varargs[string, `$`]): Sql =
+  table: string): Sql =
   
-  self.stmt.add(&"""FROM {tables.join(", ")}""")
+  self.fields = self.fields.map(proc (x: string): string = x.replace("{table}", table))
+  self.stmt.add(&"""FROM {table}""")
+  self.stmt[0] = self.stmt[0].replace("{table}", table)
   return self
 
 proc fromSql*[T: string | Sql](
@@ -96,7 +187,7 @@ proc fromSql*[T: string | Sql](
 
   return self
 
-proc whereCond[T: string | Sql](
+proc whereCond*[T: string | Sql](
   self: Sql,
   whereType: string,
   where: T, params: varargs[string, `$`]): Sql =
@@ -156,13 +247,13 @@ proc orWhere*[T: string | Sql](
   
   return self.whereCond("OR", where, params)
 
-proc likeCond[T](
+proc likeCond*[T](
   self: Sql,
   cond: string,
   field: string,
   pattern: T): Sql =
   
-  self.stmt.add(&"{cond} {field} LIKE '{pattern}'")
+  self.stmt.add(&"{cond} {field} LIKE {pattern}")
   return self
 
 proc whereLike*[T](
@@ -186,7 +277,7 @@ proc orLike*[T](
   
   return self.likeCond("OR", field, pattern)
 
-proc unionCond(
+proc unionCond*(
   self: Sql,
   cond: string,
   unionWith: Sql): Sql =
@@ -210,7 +301,7 @@ proc unionAll*(
 
   return self.unionCond("All", unionWith)
 
-proc whereInCond[T](
+proc whereInCond*[T](
   self: Sql,
   whereType: string,
   cond: string,
@@ -266,7 +357,7 @@ proc orNotIn*[T](
   
   return self.whereInCond("OR", "NOT", field, params)
 
-proc betweenCond(
+proc betweenCond*(
   self: Sql,
   whereType: string,
   cond: string,
@@ -332,9 +423,10 @@ proc groupBy*(
   self.stmt.add(&"""GROUP BY {fields.join(", ")}""")
   return self
 
-proc orderByCond(
+proc orderByCond*(
   self: Sql,
-  orderType: string, fields: varargs[string, `$`]): Sql =
+  orderType: string,
+  fields: varargs[string, `$`]): Sql =
   
   self.stmt.add(&"""ORDER BY {fields.join(", ")} {orderType}""")
   return self
@@ -393,3 +485,123 @@ proc having*(
     self.params &= params
 
   return self
+
+proc insert*(
+  self: Sql,
+  table: string,
+  fields: varargs[string, `$`]): Sql =
+
+  self.fields &= self.extractFields(fields)
+  self.stmt.add(&"""INSERT INTO {table} ({fields.join(", ")})""")
+  return self
+
+proc values*(
+  self: Sql,
+  values: varargs[seq[string]]): Sql =
+
+  if self.stmt[0].contains("INSERT"):
+    var insertVal: seq[string] = @[]
+    for v in values:
+      let val = v.map(proc (x: string): string = "?").join(", ")
+      insertVal.add(&"""({val})""")
+      self.params &= v
+    self.stmt.add(&"""VALUES ({insertVal.join(" ,")})""")
+  else:
+    raise newException(ValueError, "multi values only for INSERT")
+
+  return self
+
+proc value*(
+  self: Sql,
+  values: varargs[string, `$`]): Sql =
+
+  let stmt = self.stmt[0]
+  if stmt.contains("INSERT") or stmt.contains("UPDATE"):
+    if stmt.contains("INSERT"):
+      let insertVal = values.map(proc (x: string): string = "?").join(", ")
+      self.stmt.add(&"VALUES ({insertVal})")
+    self.params &= values
+  else:
+    raise newException(ValueError, "values only for INSERT OR UPDATE.")
+  return self
+
+proc update*(
+  self: Sql,
+  table: string,
+  fields: varargs[string, `$`]): Sql =
+
+  self.fields &= self.extractFields(fields)
+  let setFields = fields.map(proc (x: string): string = &"{x}=?").join(", ")
+  self.stmt.add(&"""UPDATE {table} SET {setFields}""")
+  return self
+
+proc delete*(
+  self: Sql,
+  table: string): Sql =
+
+  self.stmt.add(&"""DELETE FROM {table}""")
+  return self
+
+proc toDbType*(
+  field: string,
+  value: string): JsonNode =
+  
+  let data = field.split(":")
+  result = %*{data[0]: nil}
+  if data.len == 2:
+    if value != "":
+      case data[1]
+      of "int":
+        result[data[0]] = %value.tryParseInt().val
+      of "uInt":
+        result[data[0]] = %value.tryParseUInt().val
+      of "bigInt":
+        result[data[0]] = %value.tryParseBiggestInt().val
+      of "bigUInt":
+        result[data[0]] = %value.tryParseBiggestUInt().val
+      of "float":
+        result[data[0]] = %value.tryParseFloat().val
+      of "bigFloat":
+        result[data[0]] = %value.tryParseBiggestFloat().val
+      of "bool":
+        result[data[0]] = %value.tryParseBool().val
+  elif value != "":
+    result[data[0]] = %value
+
+proc toDbType*(
+  field: string,
+  nodeKind: JsonNodeKind,
+  value: string): JsonNode =
+
+  result = %*{field: nil}
+  if value != "":
+    case nodeKind
+    of JInt:
+      result[field] = %value.tryParseBiggestInt().val
+    of JFloat:
+      result[field] = %value.tryParseFloat().val
+    of JBool:
+      result[field] = %value.tryParseBool().val
+    else:
+      result[field] = %value
+
+proc toWhereQuery*(
+  j: JsonNode,
+  tablePrefix: string = "",
+  op: string = "AND"): tuple[where: string, params: seq[string]] =
+
+  var where: seq[string] = @[]
+  var whereParams: seq[string] = @[]
+  for k, v in j:
+    if v.kind == JNull: continue
+    where.add(if tablePrefix == "": &"{k}=?" else: &"{tablePrefix}.{k}=?")
+    whereParams.add(if v.kind == JString: v.getStr else: $v)
+
+  return (where.join(&" {op} "), whereParams)
+
+proc toWhereQuery*[T](
+  obj: T,
+  tablePrefix: string = "",
+  op: string = "AND"): tuple[where: string, params: seq[string]] =
+
+  return (%obj).toWhereQuery(tablePrefix, op)
