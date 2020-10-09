@@ -7,8 +7,8 @@
   Git: https://github.com/zendbit
 ]#
 
-import std/sha1, macros
-import zfcore, stdext.encrypt_ext
+import std.sha1, macros
+import zfcore, stdext/[encrypt_ext]
 
 const sessid = "_zfsid"
 

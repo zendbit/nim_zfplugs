@@ -8,7 +8,7 @@
 ]#
 
 import strformat, strutils, sequtils, json, options
-import stdext/[json_ext]
+import stdext.json_ext
 import dbs, settings, dbssql
 export dbs, dbs_sql
 
@@ -103,9 +103,8 @@ proc insertId*[T](
   obj: T): tuple[ok: bool, insertId: int64, msg: string] =
   try:
     let kv = self.extractKeyValue(obj)
-    let q = Sql().insert(
-        table,
-        kv.keys.map(proc (x: string): string = "?"))
+    let q = Sql()
+      .insert(table, kv.keys)
       .value(kv.values).toQ
     
     return (true,
@@ -251,10 +250,8 @@ proc delete*[T](
     if not self.connected:
       return (false, 0'i64, "can't connect to the database.")
 
-    let w = obj.toWhereQuery
     let q = (Sql()
-      .delete(table)
-      .where(w.where, w.params) & query).toQ
+      .delete(table) & query).toQ
     return (true, self.conn.execAffectedRows(q.query, q.params), "ok")
   except Exception as ex:
     return (false, 0'i64, ex.msg)
