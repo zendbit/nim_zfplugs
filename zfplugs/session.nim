@@ -70,10 +70,11 @@ proc getSession*(
   #
   # get session value with given session token and key
   #
-  result = %*{}
   let sessionData = ctx.getCookie().getOrDefault(sessid).readSession()
   if not sessionData.isNil:
     result = sessionData{key}
+  if result.isNil:
+    result = %*{}
 
 proc addSession*(
   ctx: HttpContext,
@@ -81,16 +82,21 @@ proc addSession*(
   #
   # add session
   #
+  var sessionData: JsonNode
   let cookie = ctx.getCookie
   var token = cookie.getOrDefault(sessid)
   if token != "":
     token = cookie[sessid]
+    sessionData = token.readSession
 
   else:
     token = createSessionToken()
     ctx.setCookie({sessid: token}.newStringTable)
 
-  let sessionData = token.readSession
+  if sessionData.isNil:
+    discard token.createSessionFromToken()
+  
+  sessionData = token.readSession
   if not sessionData.isNil:
     sessionData[key] = value
     token.writeSession(sessionData)
