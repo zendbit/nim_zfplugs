@@ -70,6 +70,7 @@ proc getSession*(
   #
   # get session value with given session token and key
   #
+  result = %*{}
   let sessionData = ctx.getCookie().getOrDefault(sessid).readSession()
   if not sessionData.isNil:
     result = sessionData{key}
