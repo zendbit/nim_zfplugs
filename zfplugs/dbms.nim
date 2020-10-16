@@ -39,7 +39,7 @@ type
 #   }
 # }
 #
-proc newDBMS*[T](connId: string): DBMS[T] =
+proc newDBMS*[T](connId: string): DBMS[T] {.gcsafe.} =
   let jsonSettings = jsonSettings()
   if not jsonSettings.isNil:
     let db = jsonSettings{"database"}
@@ -74,7 +74,7 @@ proc newDBMS*[T](connId: string): DBMS[T] =
 
 proc extractKeyValue[T](
   self: DBMS,
-  obj: T): tuple[keys: seq[string], values: seq[string]] =
+  obj: T): tuple[keys: seq[string], values: seq[string]] {.gcsafe.} =
   var keys: seq[string] = @[]
   var values: seq[string] = @[]
   let obj = %obj
@@ -100,7 +100,7 @@ proc extractKeyValue[T](
 proc insertId*[T](
   self: DBMS,
   table: string,
-  obj: T): tuple[ok: bool, insertId: int64, msg: string] =
+  obj: T): tuple[ok: bool, insertId: int64, msg: string] {.gcsafe.} =
   try:
     let kv = self.extractKeyValue(obj)
     let q = Sql()
@@ -117,7 +117,7 @@ proc update*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): tuple[ok: bool, affected: int64, msg: string] =
+  query: Sql): tuple[ok: bool, affected: int64, msg: string] {.gcsafe.} =
   ### update data table
   try:
     let kv = self.extractKeyValue(obj)
@@ -131,13 +131,13 @@ proc update*[T](
   except Exception as ex:
     return (false, 0'i64, ex.msg)
 
-proc dbError*(self: DBMS) =
+proc dbError*(self: DBMS) {.gcsafe.} =
   ###
   ### Raise DbError exception
   ###
   self.conn.dbError
 
-proc dbQuote*(s: string): string =
+proc dbQuote*(s: string): string {.gcsafe.} =
   ###
   ### Database string quote
   ###
@@ -145,7 +145,7 @@ proc dbQuote*(s: string): string =
 
 proc exec*(
   self: DBMS,
-  query: Sql): tuple[ok: bool, msg: string] =
+  query: Sql): tuple[ok: bool, msg: string] {.gcsafe.} =
   ###
   ### execute the query
   ###
@@ -158,7 +158,7 @@ proc exec*(
   except Exception as ex:
     return (false, ex.msg)
 
-proc extractFieldsAlias(fields: seq[FieldDesc]): seq[FieldDesc] =
+proc extractFieldsAlias(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
   let fields = fields.map(proc (x: FieldDesc): FieldDesc =
     (x.name.replace("-as-", " AS ").replace("-AS-", " AS "), x.nodeKind))
   
@@ -170,7 +170,7 @@ proc extractFieldsAlias(fields: seq[FieldDesc]): seq[FieldDesc] =
           result = false
           break)
 
-proc extractQueryResults(fields: seq[FieldDesc], queryResults: seq[string]): JsonNode =
+proc extractQueryResults(fields: seq[FieldDesc], queryResults: seq[string]): JsonNode {.gcsafe.} =
   result = %*{}
   if queryResults.len > 0 and queryResults[0] != "":
     for i in 0..fields.high:
@@ -182,7 +182,7 @@ proc getRow*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): tuple[ok: bool, row: T, msg: string] =
+  query: Sql): tuple[ok: bool, row: T, msg: string] {.gcsafe.} =
 
   try:
     if not self.connected:
@@ -202,7 +202,7 @@ proc getAllRows*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): tuple[ok: bool, rows: seq[T], msg: string] =
+  query: Sql): tuple[ok: bool, rows: seq[T], msg: string] {.gcsafe.} =
   ###
   ### Retrieves a single row. If the query doesn't return any rows,
   ###
@@ -226,7 +226,7 @@ proc getAllRows*[T](
 
 proc execAffectedRows*(
   self: DBMS,
-  query: Sql): tuple[ok: bool, affected: int64, msg: string] =
+  query: Sql): tuple[ok: bool, affected: int64, msg: string] {.gcsafe.} =
   ###
   ### runs the query (typically "UPDATE") and returns the number of affected rows
   ###
@@ -242,7 +242,7 @@ proc delete*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): tuple[ok: bool, affected: int64, msg: string] =
+  query: Sql): tuple[ok: bool, affected: int64, msg: string] {.gcsafe.} =
   ###
   ### runs the query delete and returns the number of affected rows
   ###
@@ -258,7 +258,7 @@ proc delete*[T](
 
 proc setEncoding(
   self: DBMS,
-  encoding: string): bool =
+  encoding: string): bool {.gcsafe.} =
   ###
   ### sets the encoding of a database connection, returns true for success, false for failure
   ###
@@ -266,11 +266,11 @@ proc setEncoding(
     return false
   return self.conn.setEncoding(encoding)
 
-proc getDbInfo*(self: DBMS): DbInfo =
+proc getDbInfo*(self: DBMS): DbInfo {.gcsafe.} =
   return self.dbInfo
 
 # close the database connection
-proc close*(self: DBMS) =
+proc close*(self: DBMS) {.gcsafe.} =
   try:
     self.conn.close
   except:
@@ -278,7 +278,7 @@ proc close*(self: DBMS) =
   self.connected = false
 
 # test ping the server
-proc ping*(self: DBMS): bool =
+proc ping*(self: DBMS): bool {.gcsafe.} =
   try:
     if not self.connected:
       return self.connected
@@ -289,7 +289,7 @@ proc ping*(self: DBMS): bool =
     discard
 
 # get connId
-proc connId*(self: DBMS): string =
+proc connId*(self: DBMS): string {.gcsafe.} =
   if not self.isNil:
     result = self.connId
 

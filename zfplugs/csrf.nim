@@ -12,14 +12,15 @@ import dbs, db_sqlite, times, std/[sha1], os, strutils, asyncdispatch
 import zfcore
 from stdext/[encrypt_ext] import xorEncodeDecode
 
-let csrfDir = zfcoreInstance.settings.tmpDir.joinPath("csrf")
+var csrfDir {.threadvar.}: string
+csrfDir = zfcoreInstance.settings.tmpDir.joinPath("csrf")
 if not csrfDir.existsDir:
   csrfDir.createDir
 
 if csrfDir.existsDir:
   zfcoreInstance.settings.addTmpCleanupDir("csrf")
 
-proc genCsrf*(): string =
+proc genCsrf*(): string {.gcsafe.} =
   #
   # generate csrf
   #
@@ -30,13 +31,13 @@ proc genCsrf*(): string =
   f.close
   result = token
 
-proc isCsrfValid*(token: string): bool =
+proc isCsrfValid*(token: string): bool {.gcsafe.} =
   #
   # check if csrf valid
   #
   return csrfDir.joinPath(token).existsFile
 
-proc delCsrf*(token: string) =
+proc delCsrf*(token: string) {.gcsafe.} =
   #
   # delete the csrf token
   #

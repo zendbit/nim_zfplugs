@@ -13,7 +13,7 @@ proc genPaging*(
   data: JsonNode,
   url: Uri3,
   perPage: int64,
-  numData: int64): JsonNode =
+  numData: int64): JsonNode {.gcsafe.} =
 
   let limit = url.getQuery("perPage", "20").parseBiggestInt
   let currentPage = url.getQuery("page", "1").parseBiggestInt

@@ -12,7 +12,8 @@ import zfcore, stdext/[encrypt_ext]
 
 const sessid = "_zfsid"
 
-let sessionDir = zfcoreInstance.settings.tmpDir.joinPath("session")
+var sessionDir {.threadvar.}: string
+sessionDir = zfcoreInstance.settings.tmpDir.joinPath("session")
 if not sessionDir.existsDir:
   sessionDir.createDir
 
@@ -20,7 +21,7 @@ if sessionDir.existsDir:
   # keep the session for month
   zfcoreInstance.settings.addTmpCleanupDir("session", 2592000)
 
-proc isSessionExists(sessionToken: string): bool =
+proc isSessionExists(sessionToken: string): bool {.gcsafe.} =
   #
   # check if session exists with given session token
   #
@@ -28,7 +29,7 @@ proc isSessionExists(sessionToken: string): bool =
 
 proc writeSession(
   sessionToken: string,
-  data: JsonNode): bool {.discardable.} =
+  data: JsonNode): bool {.discardable gcsafe.} =
   #
   # write session data with given session token and data
   #
@@ -37,7 +38,7 @@ proc writeSession(
   f.close
   result = sessionToken.isSessionExists
 
-proc createSessionToken(): string =
+proc createSessionToken(): string {.gcsafe.} =
   #
   # the session token will be used for accessing the session
   #
@@ -45,7 +46,7 @@ proc createSessionToken(): string =
   token.writeSession(%*{})
   return token
 
-proc createSessionFromToken(token: string): bool =
+proc createSessionFromToken(token: string): bool {.gcsafe.} =
   #
   # this will generate session with given token and sessionAge in seconds.
   # will check if session conflict with other session or not
@@ -54,7 +55,7 @@ proc createSessionFromToken(token: string): bool =
   if not token.isSessionExists:
     token.writeSession(%*{})
 
-proc readSession(sessionToken: string): JsonNode =
+proc readSession(sessionToken: string): JsonNode {.gcsafe.} =
   #
   # read session data with given token
   #
@@ -65,7 +66,7 @@ proc readSession(sessionToken: string): JsonNode =
 
 proc getSession*(
   ctx: HttpContext,
-  key: string): JsonNode =
+  key: string): JsonNode {.gcsafe.} =
   #
   # get session value with given session token and key
   #
@@ -75,7 +76,7 @@ proc getSession*(
 
 proc addSession*(
   ctx: HttpContext,
-  key: string, value: JsonNode) =
+  key: string, value: JsonNode) {.gcsafe.} =
   #
   # add session
   #
@@ -95,7 +96,7 @@ proc addSession*(
 
 proc deleteSession*(
   ctx: HttpContext,
-  key: string) =
+  key: string) {.gcsafe.} =
   #
   # delete session value with given session token and key
   #
@@ -104,7 +105,7 @@ proc deleteSession*(
     if sessionData.hasKey(key):
       sessionData.delete(key)
 
-proc destroySession*(ctx: HttpContext) =
+proc destroySession*(ctx: HttpContext) {.gcsafe.} =
   #
   # destroy session data
   #
