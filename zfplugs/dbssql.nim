@@ -1,5 +1,5 @@
 import db_common, sequtils, strformat, strutils, json
-import stdext/[strutils_ext]
+import stdext/[strutils_ext, json_ext]
 
 type
   Sql* = ref object
@@ -32,24 +32,6 @@ proc extractFields(
   return fields.map(proc (x: string): string =
     let field = x.toLower.split(" as ")
     result = field[field.high])
-
-#  for f in fields:
-#    var skip: bool
-#    for e in result:
-#      if e.toLower.contains(" as ") and e.endsWith(f):
-#        skip = true
-#        break
-#
-#    if not skip:
-#      result.add(f)
- 
-#proc extractFieldsAlias(
-#  self: Sql,
-#  fields: openArray[string]): seq[string] =
-  
-#  self.extractFields(fields).map(proc (x: string): string =
-#    let field = x.toLower.split(" as ")
-#    result = field[field.high])
 
 proc sqlTransaction*(sqls: varargs[Sql]): tuple[query: string, params: seq[string]] =
   var sqlParams: seq[string] = @[]
@@ -89,11 +71,12 @@ proc select*(
   fields: varargs[string, `$`]): Sql =
   
   self.fields &= self.extractFields(fields)
-  let fields = fields.map(proc (x: string): string =
+  let mapFields = fields.map(proc (x: string): string =
     result = x
     if not x.toLower.contains(" as "):
       result = &"{{table}}.{x}")
-  self.stmt.add(&"""SELECT {fields.join(", ")}""")
+  
+  self.stmt.add(&"""SELECT {mapFields.join(", ")}""")
 
   return self
 
@@ -104,9 +87,9 @@ proc select*(
   
   var fieldsList: seq[string]
   if fields.len > 0:
-    fieldsList &= fields.map(proc (x: string): string =
+    fieldsList = fields.map(proc (x: string): string =
       result = x
-      if not x.contains(" AS "):
+      if not x.toLower.contains(" as "):
         result = &"{{table}}.{x}")
 
   for fq in fieldsQuery:
@@ -132,7 +115,7 @@ proc select*(
   if fields.len > 0:
     fieldsList &= fields.map(proc (x: string): string =
       result = x
-      if not x.contains(" AS "):
+      if not x.toLower.contains(" as "):
         result = &"{{table}}.{x}")
 
   var caseStmt: seq[string]

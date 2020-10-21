@@ -74,7 +74,7 @@ proc tryConnect*[T](self: Dbs[T]): tuple[success: bool, conn: T, msg: string] {.
         "OK")
     else:
       let dbType = $(type T)
-      raise newException(ObjectConversionError, &"unknown database type {dbType}")
+      raise newException(ObjectConversionDefect, &"unknown database type {dbType}")
   except Exception as ex:
     result = (false, nil, ex.msg)
 
