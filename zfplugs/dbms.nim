@@ -72,6 +72,15 @@ proc newDBMS*[T](connId: string): DBMS[T] {.gcsafe.} =
     else:
       echo "database section not found!!."
 
+proc quote(str: string): string =
+  return str.replace("\\", "\\\\")
+    .replace("""\0""", """\\0""")
+    .replace("""\n""", """\\n""")
+    .replace("""\r""", """\\r""")
+    .replace("""\'""", """\\'""")
+    .replace("""\"""", """\\"""")
+    .replace("""\x1a""", """\\Z""")
+
 proc extractKeyValue[T](
   self: DBMS,
   obj: T): tuple[keys: seq[string], values: seq[string], nodesKind: seq[JsonNodeKind]] {.gcsafe.} =
@@ -107,12 +116,25 @@ proc insertId*[T](
   var q = Sql().toQs
   try:
     let kv = self.extractKeyValue(obj)
+    var fieldItems: seq[FieldItem] = @[]
+    for i in 0..kv.keys.high:
+      fieldItems.add((kv.values[i], kv.nodesKind[i]))
+
+    #q = Sql()
+    #  .insert(table, kv.keys)
+    #  .value(kv.values).toQs
     q = Sql()
       .insert(table, kv.keys)
-      .value(kv.values).toQs
+      .value(fieldItems).toQs
+    var queries = q.query.split("?")
+    for i in 0..q.params.high:
+      let p = q.params[i]
+      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
+      queries.insert([v], (i*2) + 1)
    
     return (true,
-      self.conn.insertId(sql q.query, q.params),
+      #self.conn.insertId(sql q.query, q.params),
+      self.conn.insertId(sql quote(queries.join(""))),
       "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q}"
@@ -128,12 +150,25 @@ proc update*[T](
   var q = Sql().toQs
   try:
     let kv = self.extractKeyValue(obj)
+    var fieldItems: seq[FieldItem] = @[]
+    for i in 0..kv.keys.high:
+      fieldItems.add((kv.values[i], kv.nodesKind[i]))
+    #q = (Sql()
+    #  .update(table, kv.keys)
+    #  .value(kv.values) & query).toQs
     q = (Sql()
       .update(table, kv.keys)
-      .value(kv.values) & query).toQs
+      .value(fieldItems) & query).toQs
      
+    var queries = q.query.split("?")
+    for i in 0..q.params.high:
+      let p = q.params[i]
+      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
+      queries.insert([v], (i*2) + 1)
+
     return (true,
-      self.conn.execAffectedRows(sql q.query, q.params),
+      #self.conn.execAffectedRows(sql q.query, q.params),
+      self.conn.execAffectedRows(sql quote(queries.join(""))),
       "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q}"
@@ -151,7 +186,13 @@ proc exec*(
     if not self.connected:
       return (false, "can't connect to the database.")
     q = query.toQs
-    self.conn.exec(sql q.query, q.params)
+    var queries = q.query.split("?")
+    for i in 0..q.params.high:
+      let p = q.params[i]
+      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
+      queries.insert([v], (i*2) + 1)
+    #self.conn.exec(sql q.query, q.params)
+    self.conn.exec(sql quote(queries.join("")))
     return (true, "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q}"
@@ -195,7 +236,14 @@ proc getRow*[T](
       .select(fields.map(proc(x: FieldDesc): string = x.name))
       .fromTable(table) & query).toQs
     
-    let queryResults = self.conn.getRow(sql q.query, q.params)
+    var queries = q.query.split("?")
+    for i in 0..q.params.high:
+      let p = q.params[i]
+      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
+      queries.insert([v], (i*2) + 1)
+    
+    #let queryResults = self.conn.getRow(sql q.query, q.params)
+    let queryResults = self.conn.getRow(sql quote(queries.join("")))
     return (true, extractQueryResults(fields, queryResults).to(T), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q}"
@@ -220,7 +268,14 @@ proc getAllRows*[T](
       .select(fields.map(proc(x: FieldDesc): string = x.name))
       .fromTable(table) & query).toQs
 
-    let queryResults = self.conn.getAllRows(sql q.query, q.params)
+    var queries = q.query.split("?")
+    for i in 0..q.params.high:
+      let p = q.params[i]
+      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
+      queries.insert([v], (i*2) + 1)
+
+    #let queryResults = self.conn.getAllRows(sql q.query, q.params)
+    let queryResults = self.conn.getAllRows(sql quote(queries.join("")))
     var res: seq[T] = @[]
     if queryResults.len > 0 and queryResults[0][0] != "":
       for qres in queryResults:
@@ -242,7 +297,15 @@ proc execAffectedRows*(
     if not self.connected:
       return (false, 0'i64, "can't connect to the database.")
     q = query.toQs
-    return (true, self.conn.execAffectedRows(sql q.query, q.params), "ok")
+
+    var queries = q.query.split("?")
+    for i in 0..q.params.high:
+      let p = q.params[i]
+      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
+      queries.insert([v], (i*2) + 1)
+
+    #return (true, self.conn.execAffectedRows(sql q.query, q.params), "ok")
+    return (true, self.conn.execAffectedRows(sql quote(queries.join(""))), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q}"
     return (false, 0'i64, ex.msg)
@@ -263,7 +326,15 @@ proc delete*[T](
 
     q = (Sql()
       .delete(table) & query).toQs
-    return (true, self.conn.execAffectedRows(sql q.query, q.params), "ok")
+    
+    var queries = q.query.split("?")
+    for i in 0..q.params.high:
+      let p = q.params[i]
+      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
+      queries.insert([v], (i*2) + 1)
+    
+    #return (true, self.conn.execAffectedRows(sql q.query, q.params), "ok")
+    return (true, self.conn.execAffectedRows(sql quote(queries.join(""))), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q}"
     return (false, 0'i64, ex.msg)

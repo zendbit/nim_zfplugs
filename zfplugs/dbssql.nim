@@ -5,14 +5,18 @@ type
   Sql* = ref object
     fields: seq[string]
     stmt: seq[string]
-    params: seq[string]
+    params: seq[FieldItem]
 
-proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[string]] =
+#proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[string]] =
+proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[FieldItem]] =
   
+  #return (self.fields, sql self.stmt.join(" "), self.params)
   return (self.fields, sql self.stmt.join(" "), self.params)
 
-proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[string]] =
+#proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[string]] =
+proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[FieldItem]] =
   
+  #return (self.fields, self.stmt.join(" "), self.params)
   return (self.fields, self.stmt.join(" "), self.params)
 
 proc `$`*(self: Sql): string =
@@ -33,8 +37,10 @@ proc extractFields(
     let field = x.toLower.split(" as ")
     result = field[field.high])
 
-proc sqlTransaction*(sqls: varargs[Sql]): tuple[query: string, params: seq[string]] =
-  var sqlParams: seq[string] = @[]
+#proc sqlTransaction*(sqls: varargs[Sql]): tuple[query: string, params: seq[string]] =
+proc sqlTransaction*(sqls: varargs[Sql]): tuple[query: string, params: seq[FieldItem]] =
+  #var sqlParams: seq[string] = @[]
+  var sqlParams: seq[FieldItem] = @[]
   return ((
     @["BEGIN"] &
     sqls.map(proc (x: Sql): string =
@@ -107,7 +113,8 @@ proc select*(
 proc select*(
   self: Sql,
   fields: openArray[string],
-  fieldsCase: openArray[tuple[caseCond: seq[tuple[cond: string, then: string]], fieldAlias: string]]): Sql =
+  #fieldsCase: openArray[tuple[caseCond: seq[tuple[cond: string, then: string]], fieldAlias: string]]): Sql =
+  fieldsCase: openArray[tuple[caseCond: seq[tuple[cond: string, then: FieldItem]], fieldAlias: string]]): Sql =
   
   let fields = self.fields.map(proc (x: string): string = &"{{table}}.{x}")
 
@@ -119,7 +126,8 @@ proc select*(
         result = &"{{table}}.{x}")
 
   var caseStmt: seq[string]
-  var caseParams: seq[string]
+  #var caseParams: seq[string]
+  var caseParams: seq[FieldItem]
   for fc in fieldsCase:
     caseStmt = @[]
     caseParams = @[]
@@ -173,7 +181,9 @@ proc fromSql*[T: string | Sql](
 proc whereCond*[T: string | Sql](
   self: Sql,
   whereType: string,
-  where: T, params: varargs[string, `$`]): Sql =
+  where: T,
+  #params: varargs[string, `$`]): Sql =
+  params: varargs[FieldItem]): Sql =
   
   if T is string:
     self.stmt.add(&"{whereType} {cast[string](where)}")
@@ -191,42 +201,48 @@ proc whereCond*[T: string | Sql](
 proc where*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[string, `$`]): Sql =
+  #params: varargs[string, `$`]): Sql =
+  params: varargs[FieldItem]): Sql =
   
   return self.whereCond("WHERE", where, params)
 
 proc whereExists*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[string, `$`]): Sql =
+  #params: varargs[string, `$`]): Sql =
+  params: varargs[FieldItem]): Sql =
   
   return self.whereCond("WHERE EXISTS", where, params)
 
 proc andExists*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[string, `$`]): Sql =
+  #params: varargs[string, `$`]): Sql =
+  params: varargs[FieldItem]): Sql =
   
   return self.whereCond("AND EXISTS", where, params)
 
 proc orExists*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[string, `$`]): Sql =
+  #params: varargs[string, `$`]): Sql =
+  params: varargs[FieldItem]): Sql =
   
   return self.whereCond("OR EXISTS", where, params)
 
 proc andWhere*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[string, `$`]): Sql =
+  #params: varargs[string, `$`]): Sql =
+  params: varargs[FieldItem]): Sql =
   
   return self.whereCond("AND", where, params)
 
 proc orWhere*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[string, `$`]): Sql =
+  #params: varargs[string, `$`]): Sql =
+  params: varargs[FieldItem]): Sql =
   
   return self.whereCond("OR", where, params)
 
@@ -345,7 +361,8 @@ proc betweenCond*(
   whereType: string,
   cond: string,
   field: string,
-  param: tuple[startVal: string, endVal: string]): Sql =
+  #param: tuple[startVal: string, endVal: string]): Sql =
+  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
   self.stmt.add(&"""{whereType} {field} {cond} BETWEEN {param.startVal} AND {param.endVal}""")
   return self
@@ -353,35 +370,40 @@ proc betweenCond*(
 proc whereBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: string, endVal: string]): Sql =
+  #param: tuple[startVal: string, endVal: string]): Sql =
+  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
   return self.betweenCond("WHERE", "", field, param)
 
 proc andBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: string, endVal: string]): Sql =
+  #param: tuple[startVal: string, endVal: string]): Sql =
+  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
   return self.betweenCond("AND", "", field, param)
 
 proc orBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: string, endVal: string]): Sql =
+  #param: tuple[startVal: string, endVal: string]): Sql =
+  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
   return self.betweenCond("OR", "", field, param)
 
 proc andNotBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: string, endVal: string]): Sql =
+  #param: tuple[startVal: string, endVal: string]): Sql =
+  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
   return self.betweenCond("AND", "NOT", field, param)
 
 proc orNotBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: string, endVal: string]): Sql =
+  #param: tuple[startVal: string, endVal: string]): Sql =
+  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
   return self.betweenCond("OR", "NOT", field, param)
 
@@ -461,7 +483,8 @@ proc fullJoin*(
 proc having*(
   self: Sql,
   having: string,
-  params: varargs[string, `$`]): Sql =
+  #params: varargs[string, `$`]): Sql =
+  params: varargs[FieldItem]): Sql =
   
   self.stmt.add(&"""HAVING {having}""")
   if params.len != 0:
@@ -480,13 +503,18 @@ proc insert*(
 
 proc values*(
   self: Sql,
-  values: varargs[seq[string]]): Sql =
+  #values: varargs[seq[string]]): Sql =
+  values: varargs[seq[FieldItem]]): Sql =
 
   if self.stmt[0].contains("INSERT"):
     var insertVal: seq[string] = @[]
     for v in values:
-      let val = v.map(proc (x: string): string = "?").join(", ")
-      insertVal.add(&"""({val})""")
+      #let val = v.map(proc (x: string): string = "?").join(", ")
+      var val: seq[string] = @[]
+      for fi in v:
+        val.add("?")
+      #insertVal.add(&"""({val})""")
+      insertVal.add(&"""({val.join(", ")})""")
       self.params &= v
     self.stmt.add(&"""VALUES ({insertVal.join(" ,")})""")
   else:
@@ -496,13 +524,18 @@ proc values*(
 
 proc value*(
   self: Sql,
-  values: varargs[string, `$`]): Sql =
+  #values: varargs[string, `$`]): Sql =
+  values: varargs[FieldItem]): Sql =
 
   let stmt = self.stmt[0]
   if stmt.contains("INSERT") or stmt.contains("UPDATE"):
     if stmt.contains("INSERT"):
-      let insertVal = values.map(proc (x: string): string = "?").join(", ")
-      self.stmt.add(&"VALUES ({insertVal})")
+      #let insertVal = values.map(proc (x: string): string = "?").join(", ")
+      var insertVal: seq[string] = @[]
+      for fi in values:
+        insertVal.add("?")
+      #self.stmt.add(&"VALUES ({insertVal})")
+      self.stmt.add(&"""VALUES ({insertVal.join(", ")})""")
     self.params &= values
   else:
     raise newException(ValueError, "values only for INSERT OR UPDATE.")
@@ -571,20 +604,24 @@ proc toDbType*(
 proc toWhereQuery*(
   j: JsonNode,
   tablePrefix: string = "",
-  op: string = "AND"): tuple[where: string, params: seq[string]] =
+  #op: string = "AND"): tuple[where: string, params: seq[string]] =
+  op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
 
   var where: seq[string] = @[]
-  var whereParams: seq[string] = @[]
+  #var whereParams: seq[string] = @[]
+  var whereParams: seq[FieldItem] = @[]
   for k, v in j:
     if v.kind == JNull: continue
     where.add(if tablePrefix == "": &"{k}=?" else: &"{tablePrefix}.{k}=?")
-    whereParams.add(if v.kind == JString: v.getStr else: $v)
+    #whereParams.add(if v.kind == JString: v.getStr else: $v)
+    whereParams.add(if v.kind == JString: (v.getStr, v.kind) else: ($v, v.kind))
 
   return (where.join(&" {op} "), whereParams)
 
 proc toWhereQuery*[T](
   obj: T,
   tablePrefix: string = "",
-  op: string = "AND"): tuple[where: string, params: seq[string]] =
+  #op: string = "AND"): tuple[where: string, params: seq[string]] =
+  op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
 
   return (%obj).toWhereQuery(tablePrefix, op)
