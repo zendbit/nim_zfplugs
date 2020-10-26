@@ -73,13 +73,11 @@ proc newDBMS*[T](connId: string): DBMS[T] {.gcsafe.} =
       echo "database section not found!!."
 
 proc quote(str: string): string =
-  return str.replace("\\", "\\\\")
-    .replace("""\0""", """\\0""")
-    .replace("""\n""", """\\n""")
-    .replace("""\r""", """\\r""")
-    .replace("""\'""", """\\'""")
-    .replace("""\"""", """\\"""")
-    .replace("""\x1a""", """\\Z""")
+  return (fmt"{str}")
+    .replace(fmt"\", fmt"\\")
+    .replace(fmt"'", fmt"\'")
+    .replace(fmt""""""", fmt"""\"""")
+    .replace(fmt"\x1a", fmt"\\Z")
 
 proc extractKeyValue[T](
   self: DBMS,
@@ -107,13 +105,23 @@ proc extractKeyValue[T](
 
   return (keys, values, nodesKind)
 
+proc quote(q: Sql): string =
+  let q = q.toQs
+  var queries = q.query.split("?")
+  for i in 0..q.params.high:
+    let p = q.params[i]
+    let v = if p.nodeKind == JString: &"'{quote(p.val)}'" else: p.val
+    queries.insert([v], (i*2) + 1)
+
+  return queries.join("")
+
 # insert into database
 proc insertId*[T](
   self: DBMS,
   table: string,
   obj: T): tuple[ok: bool, insertId: int64, msg: string] {.gcsafe.} =
   
-  var q = Sql().toQs
+  var q = Sql()
   try:
     let kv = self.extractKeyValue(obj)
     var fieldItems: seq[FieldItem] = @[]
@@ -125,19 +133,13 @@ proc insertId*[T](
     #  .value(kv.values).toQs
     q = Sql()
       .insert(table, kv.keys)
-      .value(fieldItems).toQs
-    var queries = q.query.split("?")
-    for i in 0..q.params.high:
-      let p = q.params[i]
-      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
-      queries.insert([v], (i*2) + 1)
-   
+      .value(fieldItems)
     return (true,
       #self.conn.insertId(sql q.query, q.params),
-      self.conn.insertId(sql quote(queries.join(""))),
+      self.conn.insertId(sql quote(q)),
       "ok")
   except Exception as ex:
-    echo &"{ex.msg}, {q}"
+    echo &"{ex.msg}, {q.toQs}"
     return (false, 0'i64, ex.msg)
 
 proc update*[T](
@@ -147,7 +149,7 @@ proc update*[T](
   query: Sql): tuple[ok: bool, affected: int64, msg: string] {.gcsafe.} =
   ### update data table
 
-  var q = Sql().toQs
+  var q = Sql()
   try:
     let kv = self.extractKeyValue(obj)
     var fieldItems: seq[FieldItem] = @[]
@@ -158,20 +160,14 @@ proc update*[T](
     #  .value(kv.values) & query).toQs
     q = (Sql()
       .update(table, kv.keys)
-      .value(fieldItems) & query).toQs
+      .value(fieldItems) & query)
      
-    var queries = q.query.split("?")
-    for i in 0..q.params.high:
-      let p = q.params[i]
-      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
-      queries.insert([v], (i*2) + 1)
-
     return (true,
       #self.conn.execAffectedRows(sql q.query, q.params),
-      self.conn.execAffectedRows(sql quote(queries.join(""))),
+      self.conn.execAffectedRows(sql quote(q)),
       "ok")
   except Exception as ex:
-    echo &"{ex.msg}, {q}"
+    echo &"{ex.msg}, {q.toQs}"
     return (false, 0'i64, ex.msg)
 
 proc exec*(
@@ -181,21 +177,16 @@ proc exec*(
   ### execute the query
   ###
 
-  var q = Sql().toQs
+  var q = Sql()
   try:
     if not self.connected:
       return (false, "can't connect to the database.")
-    q = query.toQs
-    var queries = q.query.split("?")
-    for i in 0..q.params.high:
-      let p = q.params[i]
-      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
-      queries.insert([v], (i*2) + 1)
+    q = query
     #self.conn.exec(sql q.query, q.params)
-    self.conn.exec(sql quote(queries.join("")))
+    self.conn.exec(sql quote(q))
     return (true, "ok")
   except Exception as ex:
-    echo &"{ex.msg}, {q}"
+    echo &"{ex.msg}, {q.toQs}"
     return (false, ex.msg)
 
 proc extractFieldsAlias(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
@@ -226,7 +217,7 @@ proc getRow*[T](
   obj: T,
   query: Sql): tuple[ok: bool, row: T, msg: string] {.gcsafe.} =
 
-  var q = Sql().toQs
+  var q = Sql()
   try:
     if not self.connected:
       return (false, obj, "can't connect to the database.")
@@ -234,19 +225,13 @@ proc getRow*[T](
     let fields = extractFieldsAlias(obj.fieldsDesc)
     q = (Sql()
       .select(fields.map(proc(x: FieldDesc): string = x.name))
-      .fromTable(table) & query).toQs
-    
-    var queries = q.query.split("?")
-    for i in 0..q.params.high:
-      let p = q.params[i]
-      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
-      queries.insert([v], (i*2) + 1)
-    
+      .fromTable(table) & query)
+     
     #let queryResults = self.conn.getRow(sql q.query, q.params)
-    let queryResults = self.conn.getRow(sql quote(queries.join("")))
+    let queryResults = self.conn.getRow(sql quote(q))
     return (true, extractQueryResults(fields, queryResults).to(T), "ok")
   except Exception as ex:
-    echo &"{ex.msg}, {q}"
+    echo &"{ex.msg}, {q.toQs}"
     return (false, obj, ex.msg)
 
 proc getAllRows*[T](
@@ -258,7 +243,7 @@ proc getAllRows*[T](
   ### Retrieves a single row. If the query doesn't return any rows,
   ###
 
-  var q = Sql().toQs
+  var q = Sql()
   try:
     if not self.connected:
       return (false, @[], "can't connect to the database.")
@@ -266,23 +251,17 @@ proc getAllRows*[T](
     let fields = extractFieldsAlias(obj.fieldsDesc)
     q = (Sql()
       .select(fields.map(proc(x: FieldDesc): string = x.name))
-      .fromTable(table) & query).toQs
-
-    var queries = q.query.split("?")
-    for i in 0..q.params.high:
-      let p = q.params[i]
-      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
-      queries.insert([v], (i*2) + 1)
+      .fromTable(table) & query)
 
     #let queryResults = self.conn.getAllRows(sql q.query, q.params)
-    let queryResults = self.conn.getAllRows(sql quote(queries.join("")))
+    let queryResults = self.conn.getAllRows(sql quote(q))
     var res: seq[T] = @[]
     if queryResults.len > 0 and queryResults[0][0] != "":
       for qres in queryResults:
         res.add(extractQueryResults(fields, qres).to(T))
     return (true, res, "ok")
   except Exception as ex:
-    echo &"{ex.msg}, {q}"
+    echo &"{ex.msg}, {q.toQs}"
     return (false, @[], ex.msg)
 
 proc execAffectedRows*(
@@ -292,22 +271,16 @@ proc execAffectedRows*(
   ### runs the query (typically "UPDATE") and returns the number of affected rows
   ###
 
-  var q = Sql().toQs
+  var q = Sql()
   try:
     if not self.connected:
       return (false, 0'i64, "can't connect to the database.")
-    q = query.toQs
-
-    var queries = q.query.split("?")
-    for i in 0..q.params.high:
-      let p = q.params[i]
-      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
-      queries.insert([v], (i*2) + 1)
+    q = query
 
     #return (true, self.conn.execAffectedRows(sql q.query, q.params), "ok")
-    return (true, self.conn.execAffectedRows(sql quote(queries.join(""))), "ok")
+    return (true, self.conn.execAffectedRows(sql quote(q)), "ok")
   except Exception as ex:
-    echo &"{ex.msg}, {q}"
+    echo &"{ex.msg}, {q.toQs}"
     return (false, 0'i64, ex.msg)
 
 proc delete*[T](
@@ -319,24 +292,18 @@ proc delete*[T](
   ### runs the query delete and returns the number of affected rows
   ###
   
-  var q = Sql().toQs
+  var q = Sql()
   try:
     if not self.connected:
       return (false, 0'i64, "can't connect to the database.")
 
     q = (Sql()
-      .delete(table) & query).toQs
-    
-    var queries = q.query.split("?")
-    for i in 0..q.params.high:
-      let p = q.params[i]
-      let v = if p.nodeKind == JString: &"'{p.val}'" else: p.val
-      queries.insert([v], (i*2) + 1)
+      .delete(table) & query)
     
     #return (true, self.conn.execAffectedRows(sql q.query, q.params), "ok")
-    return (true, self.conn.execAffectedRows(sql quote(queries.join(""))), "ok")
+    return (true, self.conn.execAffectedRows(sql quote(q)), "ok")
   except Exception as ex:
-    echo &"{ex.msg}, {q}"
+    echo &"{ex.msg}, {q.toQs}"
     return (false, 0'i64, ex.msg)
 
 proc setEncoding(
