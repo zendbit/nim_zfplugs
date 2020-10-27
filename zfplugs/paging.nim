@@ -7,7 +7,7 @@
   Git: https://github.com/zendbit
 ]#
 
-import uri3, json, math, strutils
+import uri3, json, math, strutils, strformat
 
 proc genPaging*(
   data: JsonNode,
@@ -25,7 +25,8 @@ proc genPaging*(
     "page": 1,
     "numData": numData,
     "lastPage": "",
-    "firstPage": ""}
+    "firstPage": "",
+    "perPage": perPage}
   
   if not data.isNil and data.kind == JsonNodeKind.JArray:
     if currentPage > 0:
@@ -48,3 +49,55 @@ proc genPaging*(
 
       url.setQuery("page", "1")
       result["firstPage"] = % $url
+
+proc genPagingLink*(
+  url: string,
+  pagingData: JsonNode,
+  pagingStep: BiggestInt = 10): JsonNode =
+  ##
+  ## pagingData is result from genPaging() result
+  ##
+  var maxPageToShow = pagingStep
+  let numPage = pagingData{"numPage"}.getBiggestInt
+  let page = pagingData{"page"}.getBiggestInt
+  result = %*{
+    "pages": [],
+    "numData": pagingData{"numData"}.getBiggestInt,
+    "numPage": numPage,
+    "page": page,
+    "next": "",
+    "prev": "",
+    "last": "",
+    "first": ""}
+  if numPage > 1:
+    let pageUri = pagingData{"firstPage"}.getStr.parseUri3
+    let firstPage = pagingData{"firstPage"}.getStr.parseUri3
+    let lastPage = pagingData{"lastPage"}.getStr.parseUri3
+    let nextPage = pagingData{"nextPage"}.getStr.parseUri3
+    let prevPage = pagingData{"prevPage"}.getStr.parseUri3
+    if maxPageToShow > numPage:
+      maxPageToShow = numPage
+
+    var startPage = (page div pagingStep) + 1
+    var endPage = (startPage + maxPageToShow) - 1
+    if endPage > numPage:
+      endPage = numPage
+
+    if numPage > pagingStep:
+      if startPage != 1:
+        result{"first"} = %(url & firstPage.getQueryString)
+
+      if endPage != numPage:
+        result{"last"} = %(url & lastPage.getQueryString)
+      
+      if prevPage.getPathSegments.len != 0:
+        result{"prev"} = %(url & prevPage.getQueryString)
+      
+      if nextPage.getPathSegments.len != 0:
+        result{"next"} = %(url & nextPage.getQueryString)
+    
+    for i in startPage..endPage:
+      result{"pages"}.add(%*{
+        "name": $i,
+        "url": (url & pageUri.getQueryString)
+          .replace("page=1", &"page={i}")}) 

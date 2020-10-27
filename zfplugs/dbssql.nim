@@ -308,9 +308,12 @@ proc whereInCond*[T](
   params: T): Sql =
   
   if T isnot Sql:
-    let inParams = cast[seq[string]](params)
+    let inParams = cast[seq[FieldItem]](params)
     if inParams.len != 0:
-      let inStmtParams = inParams.map(proc (x: string): string = "?")
+      #let inStmtParams = inParams.map(proc (x: string): string = "?")
+      var inStmtParams: seq[string] = @[]
+      for i in 0..inParams.high:
+        inStmtParams.add("?")
       self.stmt.add(&"""{whereType} {field} {cond} IN ({inStmtParams.join(", ")})""")
       self.params &= inParams
   else:

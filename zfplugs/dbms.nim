@@ -79,7 +79,7 @@ proc quote(str: string): string =
     .replace(fmt""""""", fmt"""\"""")
     .replace(fmt"\x1a", fmt"\\Z")
 
-proc extractKeyValue[T](
+proc extractKeyValue*[T](
   self: DBMS,
   obj: T): tuple[keys: seq[string], values: seq[string], nodesKind: seq[JsonNodeKind]] {.gcsafe.} =
   var keys: seq[string] = @[]
@@ -140,6 +140,7 @@ proc insertId*[T](
       "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
+    echo quote(q)
     return (false, 0'i64, ex.msg)
 
 proc update*[T](
@@ -168,6 +169,7 @@ proc update*[T](
       "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
+    echo quote(q)
     return (false, 0'i64, ex.msg)
 
 proc exec*(
@@ -187,9 +189,10 @@ proc exec*(
     return (true, "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
+    echo quote(q)
     return (false, ex.msg)
 
-proc extractFieldsAlias(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
+proc extractFieldsAlias*(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
   
   let fields = fields.map(proc (x: FieldDesc): FieldDesc =
     (x.name.replace("-as-", " AS ").replace("-AS-", " AS "), x.nodeKind))
@@ -202,7 +205,12 @@ proc extractFieldsAlias(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
           result = false
           break)
 
-proc extractQueryResults(fields: seq[FieldDesc], queryResults: seq[string]): JsonNode {.gcsafe.} =
+proc normalizeFieldsAlias*(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
+  
+  return fields.extractFieldsAlias.map(proc (x: FieldDesc): FieldDesc =
+    (x.name.split(" AS ")[0].strip, x.nodeKind))
+
+proc extractQueryResults*(fields: seq[FieldDesc], queryResults: seq[string]): JsonNode {.gcsafe.} =
   
   result = %*{}
   if queryResults.len > 0 and queryResults[0] != "" and queryResults.len == fields.len:
@@ -232,6 +240,7 @@ proc getRow*[T](
     return (true, extractQueryResults(fields, queryResults).to(T), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
+    echo quote(q)
     return (false, obj, ex.msg)
 
 proc getAllRows*[T](
@@ -262,6 +271,7 @@ proc getAllRows*[T](
     return (true, res, "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
+    echo quote(q)
     return (false, @[], ex.msg)
 
 proc execAffectedRows*(
@@ -281,6 +291,7 @@ proc execAffectedRows*(
     return (true, self.conn.execAffectedRows(sql quote(q)), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
+    echo quote(q)
     return (false, 0'i64, ex.msg)
 
 proc delete*[T](
@@ -304,6 +315,7 @@ proc delete*[T](
     return (true, self.conn.execAffectedRows(sql quote(q)), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
+    echo quote(q)
     return (false, 0'i64, ex.msg)
 
 proc setEncoding(
