@@ -561,6 +561,19 @@ proc delete*(
   self.stmt.add(&"""DELETE FROM {table}""")
   return self
 
+proc bracket*(
+  self: Sql,
+  query: Sql): Sql =
+
+  let q = query.toQs
+  self.stmt.add((&"({q.query})")
+    .replace("(WHERE", "WHERE(")
+    .replace("(AND", "AND(")
+    .replace("(OR", "OR(")
+    .replace("(NOT", "NOT("))
+  self.params &= q.params
+  return self
+
 proc toDbType*(
   field: string,
   value: string): JsonNode =
