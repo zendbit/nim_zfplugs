@@ -23,6 +23,11 @@ type
     host: string
     port: int
 
+  DbsResult*[T] = tuple[
+    success: bool,
+    conn: T,
+    msg: string]
+
 proc newDbs*[T](
   database: string,
   username: string = "",
@@ -39,7 +44,7 @@ proc newDbs*[T](
 
   return instance
 
-proc tryConnect*[T](self: Dbs[T]): tuple[success: bool, conn: T, msg: string] {.gcsafe.} =
+proc tryConnect*[T](self: Dbs[T]): DbsResult[T] {.gcsafe.} =
   ##
   ## Try connect to database
   ## Generic T is type of MySql, PgSql, SqLite
@@ -78,7 +83,7 @@ proc tryConnect*[T](self: Dbs[T]): tuple[success: bool, conn: T, msg: string] {.
   except Exception as ex:
     result = (false, nil, ex.msg)
 
-proc tryCheckConnect*[T](self: Dbs[T]): tuple[success: bool, msg: string] {.gcsafe.} =
+proc tryCheckConnect*[T](self: Dbs[T]): DbsResult[T] {.gcsafe.} =
   try:
     var c = self.tryConnect[T]()
     if c.success:

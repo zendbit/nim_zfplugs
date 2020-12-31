@@ -7,8 +7,8 @@
   Git: https://github.com/zendbit
 ]#
 
-import strformat, strutils, sequtils, json, options, re
-import stdext.json_ext
+import strformat, strutils, sequtils, json, options, re, db_mysql, db_postgres, db_sqlite
+import stdext. json_ext
 import dbs, settings, dbssql
 export dbs, dbssql
 
@@ -20,10 +20,10 @@ type
     host: string, port: int]
 
   DBMS*[T] = ref object
-    connId: string
-    dbInfo: DbInfo
-    conn: T
-    connected: bool
+    connId*: string
+    dbInfo*: DbInfo
+    conn*: T
+    connected*: bool
 
 #var db: DBConn
 
@@ -71,6 +71,39 @@ proc newDBMS*[T](connId: string): DBMS[T] {.gcsafe.} =
 
     else:
       echo "database section not found!!."
+
+proc tryConnect*[T](self: DBMS[T]): bool {.gcsafe.} =
+  ##
+  ## Try connect to database
+  ## Generic T is type of MySql, PgSql, SqLite
+  ##
+  result = true
+  try:
+    if T is PgSql:
+      self.conn = cast[T](db_postgres.open(
+        &"{self.dbInfo.host}:{self.dbInfo.port}",
+        self.dbInfo.username,
+        self.dbInfo.password,
+        self.dbInfo.database))
+    elif T is MySql:
+      self.conn = cast[T](db_mysql.open(
+        &"{self.dbInfo.host}:{self.dbInfo.port}",
+        self.dbInfo.username,
+        self.dbInfo.password,
+        self.dbInfo.database))
+    elif T is SqLite:
+      self.conn = cast[T](db_sqlite.open(
+        self.dbInfo.database,
+        "",
+        "",
+        ""))
+    else:
+      let dbType = $(type T)
+      echo &"unknown database type {dbType}"
+      result = false
+  except Exception as ex:
+    echo ex.msg
+    result = false
 
 proc quote(str: string): string =
   return (fmt"{str}")
