@@ -12,11 +12,9 @@ available plugins
 zfplugs/auth
 zfplugs/csrf
 zfplugs/dbs
-zfplugs/mysql
+zfplugs/dbms
+zfplugs/dbssql
 zfplugs/paging
-zfplugs/pgsql
 zfplugs/settings
-zfplugs/sqlite
+zfplugs/session
 ```
-
-this project still in heavy development and testing, the documentation will be added after we make sure all plugins running well in production
