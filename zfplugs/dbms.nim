@@ -377,9 +377,10 @@ proc ping*(self: DBMS): bool {.gcsafe.} =
   try:
     if not self.connected:
       return self.connected
-    self.conn.exec(sql "SELECT 1")
+    discard self.conn.getRow(sql "SELECT 1")
     result = true
-  except:
+  except Exception as e:
+    echo e.msg
     self.close
     discard
 
