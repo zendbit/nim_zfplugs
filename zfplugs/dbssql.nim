@@ -3,21 +3,25 @@ import stdext/[strutils_ext, json_ext]
 
 type
   Sql* = ref object
-    fields: seq[string]
-    stmt: seq[string]
-    params: seq[FieldItem]
+    fields*: seq[string]
+    stmt*: seq[string]
+    params*: seq[FieldItem]
+
+  TransactionType* = enum
+    Read,
+    ReadWrite
 
 #proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[string]] =
 proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[FieldItem]] =
   
   #return (self.fields, sql self.stmt.join(" "), self.params)
-  return (self.fields, sql self.stmt.join(" "), self.params)
+  return (self.fields, sql self.stmt.join(" ") & ";", self.params)
 
 #proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[string]] =
 proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[FieldItem]] =
   
   #return (self.fields, self.stmt.join(" "), self.params)
-  return (self.fields, self.stmt.join(" "), self.params)
+  return (self.fields, self.stmt.join(" ") & ";", self.params)
 
 proc `$`*(self: Sql): string =
   return $self.toQs
@@ -36,19 +40,6 @@ proc extractFields(
   return fields.map(proc (x: string): string =
     let field = x.toLower.split(" as ")
     result = field[field.high])
-
-#proc sqlTransaction*(sqls: varargs[Sql]): tuple[query: string, params: seq[string]] =
-proc sqlTransaction*(sqls: varargs[Sql]): tuple[query: string, params: seq[FieldItem]] =
-  #var sqlParams: seq[string] = @[]
-  var sqlParams: seq[FieldItem] = @[]
-  return ((
-    @["BEGIN"] &
-    sqls.map(proc (x: Sql): string =
-      let q = x.toQs
-      sqlParams &= q.params
-      return q.query) &
-    @["COMMIT;"]).join(";"),
-    sqlParams)
 
 proc dropDatabase*(
   self: Sql,
@@ -574,6 +565,45 @@ proc bracket*(
   self.params &= q.params
   return self
 
+proc startTransaction*(self: Sql): Sql =
+
+  self.stmt.add("START TRANSACTION;")
+
+  return self
+
+proc setTransaction*(
+  self: Sql,
+  transactionType: TransactionType): Sql =
+
+  if transactionType == Read:
+    self.stmt.add("SET TRANSACTION READ ONLY;")
+  else:
+    self.stmt.add("SET TRANSACTION READ WRITE;")
+
+  return self
+
+proc savePointTransaction*(
+  self: Sql,
+  savePoint: string): Sql =
+
+  self.stmt.add(&"SAVEPOINT {savePoint};")
+  return self
+
+proc commitTransaction*(self: Sql): Sql =
+
+  self.stmt.add("COMMIT;")
+  return self
+
+proc rollbackTransaction*(
+  self: Sql,
+  savePoint: string = ""): Sql =
+
+  if savePoint != "":
+    self.stmt.add(&"ROLLBACK TO {savePoint};")
+  else:
+    self.stmt.add("ROLLBACK;")
+  return self
+
 proc toDbType*(
   field: string,
   value: string): JsonNode =
@@ -641,3 +671,4 @@ proc toWhereQuery*[T](
   op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
 
   return (%obj).toWhereQuery(tablePrefix, op)
+

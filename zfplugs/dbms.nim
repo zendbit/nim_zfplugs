@@ -25,6 +25,40 @@ type
     conn*: T
     connected*: bool
 
+  KVObj* = tuple[
+    keys: seq[string],
+    values: seq[string],
+    nodesKind: seq[JsonNodeKind]]
+
+  InsertIdResult* = tuple[
+    ok: bool,
+    insertId: int64,
+    msg: string]
+
+  UpdateResult* = tuple[
+    ok: bool,
+    affected: int64,
+    msg: string]
+  
+  ExecResult* = tuple[
+    ok: bool,
+    msg: string]
+
+  RowResult*[T] = tuple[
+    ok: bool,
+    row: T,
+    msg: string]
+
+  RowsResult*[T] = tuple[
+    ok: bool,
+    rows: seq[T],
+    msg: string]
+
+  AffectedRowsResult* = tuple[
+    ok: bool,
+    affected: int64,
+    msg: string]
+
 #var db: DBConn
 
 #
@@ -114,7 +148,7 @@ proc quote(str: string): string =
 
 proc extractKeyValue*[T](
   self: DBMS,
-  obj: T): tuple[keys: seq[string], values: seq[string], nodesKind: seq[JsonNodeKind]] {.gcsafe.} =
+  obj: T): KVObj {.gcsafe.} =
   var keys: seq[string] = @[]
   var values: seq[string] = @[]
   var nodesKind: seq[JsonNodeKind] = @[]
@@ -152,25 +186,26 @@ proc quote(q: Sql): string =
 proc insertId*[T](
   self: DBMS,
   table: string,
-  obj: T): tuple[ok: bool, insertId: int64, msg: string] {.gcsafe.} =
+  obj: T): InsertIdResult {.gcsafe.} =
   
   var q = Sql()
   try:
+    if not self.connected:
+      return (false, 0'i64, "can't connect to the database.")
+
     let kv = self.extractKeyValue(obj)
     var fieldItems: seq[FieldItem] = @[]
     for i in 0..kv.keys.high:
       fieldItems.add((kv.values[i], kv.nodesKind[i]))
 
-    #q = Sql()
-    #  .insert(table, kv.keys)
-    #  .value(kv.values).toQs
     q = Sql()
       .insert(table, kv.keys)
       .value(fieldItems)
+    
     return (true,
-      #self.conn.insertId(sql q.query, q.params),
       self.conn.insertId(sql quote(q)),
       "ok")
+
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
@@ -180,26 +215,27 @@ proc update*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): tuple[ok: bool, affected: int64, msg: string] {.gcsafe.} =
+  query: Sql): UpdateResult {.gcsafe.} =
   ### update data table
 
   var q = Sql()
   try:
+    if not self.connected:
+      return (false, 0'i64, "can't connect to the database.")
+
     let kv = self.extractKeyValue(obj)
     var fieldItems: seq[FieldItem] = @[]
     for i in 0..kv.keys.high:
       fieldItems.add((kv.values[i], kv.nodesKind[i]))
-    #q = (Sql()
-    #  .update(table, kv.keys)
-    #  .value(kv.values) & query).toQs
-    q = (Sql()
+    
+    q = Sql()
       .update(table, kv.keys)
-      .value(fieldItems) & query)
-     
+      .value(fieldItems) & query
+    
     return (true,
-      #self.conn.execAffectedRows(sql q.query, q.params),
       self.conn.execAffectedRows(sql quote(q)),
       "ok")
+
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
@@ -207,7 +243,7 @@ proc update*[T](
 
 proc exec*(
   self: DBMS,
-  query: Sql): tuple[ok: bool, msg: string] {.gcsafe.} =
+  query: Sql): ExecResult {.gcsafe.} =
   ###
   ### execute the query
   ###
@@ -216,10 +252,12 @@ proc exec*(
   try:
     if not self.connected:
       return (false, "can't connect to the database.")
+
     q = query
-    #self.conn.exec(sql q.query, q.params)
+    
     self.conn.exec(sql quote(q))
     return (true, "ok")
+
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
@@ -256,7 +294,7 @@ proc getRow*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): tuple[ok: bool, row: T, msg: string] {.gcsafe.} =
+  query: Sql): RowResult[T] {.gcsafe.} =
 
   var q = Sql()
   try:
@@ -268,7 +306,6 @@ proc getRow*[T](
       .select(fields.map(proc(x: FieldDesc): string = x.name))
       .fromTable(table) & query)
      
-    #let queryResults = self.conn.getRow(sql q.query, q.params)
     let queryResults = self.conn.getRow(sql quote(q))
     return (true, extractQueryResults(fields, queryResults).to(T), "ok")
   except Exception as ex:
@@ -280,7 +317,7 @@ proc getAllRows*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): tuple[ok: bool, rows: seq[T], msg: string] {.gcsafe.} =
+  query: Sql): RowsResult[T] {.gcsafe.} =
   ###
   ### Retrieves a single row. If the query doesn't return any rows,
   ###
@@ -295,7 +332,6 @@ proc getAllRows*[T](
       .select(fields.map(proc(x: FieldDesc): string = x.name))
       .fromTable(table) & query)
 
-    #let queryResults = self.conn.getAllRows(sql q.query, q.params)
     let queryResults = self.conn.getAllRows(sql quote(q))
     var res: seq[T] = @[]
     if queryResults.len > 0 and queryResults[0][0] != "":
@@ -309,7 +345,7 @@ proc getAllRows*[T](
 
 proc execAffectedRows*(
   self: DBMS,
-  query: Sql): tuple[ok: bool, affected: int64, msg: string] {.gcsafe.} =
+  query: Sql): AffectedRowsResult {.gcsafe.} =
   ###
   ### runs the query (typically "UPDATE") and returns the number of affected rows
   ###
@@ -320,8 +356,7 @@ proc execAffectedRows*(
       return (false, 0'i64, "can't connect to the database.")
     q = query
 
-    #return (true, self.conn.execAffectedRows(sql q.query, q.params), "ok")
-    return (true, self.conn.execAffectedRows(sql quote(q)), "ok")
+    result = (true, self.conn.execAffectedRows(sql quote(q)), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
@@ -331,7 +366,7 @@ proc delete*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): tuple[ok: bool, affected: int64, msg: string] {.gcsafe.} =
+  query: Sql): AffectedRowsResult {.gcsafe.} =
   ###
   ### runs the query delete and returns the number of affected rows
   ###
@@ -344,8 +379,7 @@ proc delete*[T](
     q = (Sql()
       .delete(table) & query)
     
-    #return (true, self.conn.execAffectedRows(sql q.query, q.params), "ok")
-    return (true, self.conn.execAffectedRows(sql quote(q)), "ok")
+    result = (true, self.conn.execAffectedRows(sql quote(q)), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
@@ -389,3 +423,27 @@ proc connId*(self: DBMS): string {.gcsafe.} =
   if not self.isNil:
     result = self.connId
 
+proc startTransaction*(
+  self: DBMS,
+  transactionType: TransactionType = ReadWrite): ExecResult {.gcsafe discardable.} =
+
+  result = self.exec(Sql().setTransaction(transactionType))
+  result = self.exec(Sql().startTransaction)
+
+proc commitTransaction*(self: DBMS): ExecResult {.gcsafe discardable.} =
+
+  return self.exec(Sql().commitTransaction)
+
+proc savePointTransaction*(
+  self: DBMS,
+  savePoint: string): ExecResult {.gcsafe discardable.} =
+
+  return self.exec(Sql().savePointTransaction(savePoint))
+
+proc rollbackTransaction*(
+  self: DBMS,
+  savePoint: string = ""): ExecResult {.gcsafe discardable.} =
+
+  return self.exec(Sql().rollbackTransaction(savePoint))
+
+  return self.exec(Sql().commitTransaction)
