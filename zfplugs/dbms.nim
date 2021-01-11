@@ -111,33 +111,16 @@ proc tryConnect*[T](self: DBMS[T]): bool {.gcsafe.} =
   ## Try connect to database
   ## Generic T is type of MySql, PgSql, SqLite
   ##
-  result = true
-  try:
-    if T is PgSql:
-      self.conn = cast[T](db_postgres.open(
-        &"{self.dbInfo.host}:{self.dbInfo.port}",
-        self.dbInfo.username,
-        self.dbInfo.password,
-        self.dbInfo.database))
-    elif T is MySql:
-      self.conn = cast[T](db_mysql.open(
-        &"{self.dbInfo.host}:{self.dbInfo.port}",
-        self.dbInfo.username,
-        self.dbInfo.password,
-        self.dbInfo.database))
-    elif T is SqLite:
-      self.conn = cast[T](db_sqlite.open(
-        self.dbInfo.database,
-        "",
-        "",
-        ""))
-    else:
-      let dbType = $(type T)
-      echo &"unknown database type {dbType}"
-      result = false
-  except Exception as ex:
-    echo ex.msg
-    result = false
+
+  let c = newDbs[T](
+    self.dbInfo.database,
+    self.dbInfo.username,
+    self.dbInfo.password,
+    self.dbInfo.host,
+    self.dbInfo.port).tryConnect()
+  self.conn = c.conn
+  self.connected = c.success
+  return self.connected
 
 proc quote(str: string): string =
   return (fmt"{str}")
