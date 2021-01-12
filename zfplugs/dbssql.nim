@@ -7,10 +7,6 @@ type
     stmt*: seq[string]
     params*: seq[FieldItem]
 
-  TransactionType* = enum
-    Read,
-    ReadWrite
-
 #proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[string]] =
 proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[FieldItem]] =
   
@@ -568,17 +564,6 @@ proc bracket*(
 proc startTransaction*(self: Sql): Sql =
 
   self.stmt.add("START TRANSACTION;")
-
-  return self
-
-proc setTransaction*(
-  self: Sql,
-  transactionType: TransactionType): Sql =
-
-  if transactionType == Read:
-    self.stmt.add("SET TRANSACTION READ ONLY;")
-  else:
-    self.stmt.add("SET TRANSACTION READ WRITE;")
 
   return self
 

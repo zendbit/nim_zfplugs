@@ -406,11 +406,8 @@ proc connId*(self: DBMS): string {.gcsafe.} =
   if not self.isNil:
     result = self.connId
 
-proc startTransaction*(
-  self: DBMS,
-  transactionType: TransactionType = ReadWrite): ExecResult {.gcsafe discardable.} =
+proc startTransaction*(self: DBMS): ExecResult {.gcsafe discardable.} =
 
-  result = self.exec(Sql().setTransaction(transactionType))
   result = self.exec(Sql().startTransaction)
 
 proc commitTransaction*(self: DBMS): ExecResult {.gcsafe discardable.} =
