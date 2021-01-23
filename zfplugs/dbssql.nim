@@ -643,28 +643,3 @@ proc toDbType*(
     else:
       result[field] = %value
 
-proc toWhereQuery*(
-  j: JsonNode,
-  tablePrefix: string = "",
-  #op: string = "AND"): tuple[where: string, params: seq[string]] =
-  op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
-
-  var where: seq[string] = @[]
-  #var whereParams: seq[string] = @[]
-  var whereParams: seq[FieldItem] = @[]
-  for k, v in j:
-    if v.kind == JNull: continue
-    where.add(if tablePrefix == "": &"{k}=?" else: &"{tablePrefix}.{k}=?")
-    #whereParams.add(if v.kind == JString: v.getStr else: $v)
-    whereParams.add(if v.kind == JString: (v.getStr, v.kind) else: ($v, v.kind))
-
-  return (where.join(&" {op} "), whereParams)
-
-proc toWhereQuery*[T](
-  obj: T,
-  tablePrefix: string = "",
-  #op: string = "AND"): tuple[where: string, params: seq[string]] =
-  op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
-
-  return (%obj).toWhereQuery(tablePrefix, op)
-

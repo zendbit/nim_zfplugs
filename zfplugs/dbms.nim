@@ -445,3 +445,33 @@ proc rollbackTransaction*(
   return self.exec(Sql().rollbackTransaction(savePoint))
 
   return self.exec(Sql().commitTransaction)
+
+proc toWhereQuery*(
+  j: JsonNode,
+  tablePrefix: string = "",
+  #op: string = "AND"): tuple[where: string, params: seq[string]] =
+  op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
+
+  var where: seq[string] = @[]
+  #var whereParams: seq[string] = @[]
+  let fp = j.fieldsPair.normalizeFieldsAlias
+  var whereParams: seq[FieldItem] = @[]
+  #for k, v in j:
+  for (k, v, kind) in fp:
+    #if v.kind == JNull: continue
+    if kind == JNull: continue
+    where.add(if tablePrefix == "": &"{k}=?" else: &"{tablePrefix}.{k}=?")
+    #whereParams.add(if v.kind == JString: v.getStr else: $v)
+    #whereParams.add(if v.kind == JString: (v.getStr, v.kind) else: ($v, v.kind))
+    whereParams.add((v, kind))
+
+  return (where.join(&" {op} "), whereParams)
+
+proc toWhereQuery*[T](
+  obj: T,
+  tablePrefix: string = "",
+  #op: string = "AND"): tuple[where: string, params: seq[string]] =
+  op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
+
+  return (%obj).toWhereQuery(tablePrefix, op)
+
