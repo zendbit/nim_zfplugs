@@ -553,12 +553,33 @@ proc bracket*(
   query: Sql): Sql =
 
   let q = query.toQs
-  self.stmt.add((&"({q.query})")
-    .replace("(WHERE", "WHERE(")
-    .replace("(AND", "AND(")
-    .replace("(OR", "OR(")
-    .replace("(NOT", "NOT("))
+  self.stmt.add(&"({q.query})")
   self.params &= q.params
+  return self
+
+proc `and`*(self: Sql): Sql =
+
+  self.stmt.add("AND")
+  return self
+
+proc `or`*(self: Sql): Sql =
+
+  self.stmt.add("OR")
+  return self
+
+proc `not`*(self: Sql): Sql =
+
+  self.stmt.add("NOT")
+  return self
+
+proc `in`*(self: Sql): Sql =
+
+  self.stmt.add("IN")
+  return self
+
+proc `notIn`*(self: Sql): Sql =
+
+  self.stmt.add("NOT IN")
   return self
 
 proc startTransaction*(self: Sql): Sql =

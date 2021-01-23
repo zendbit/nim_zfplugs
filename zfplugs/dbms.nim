@@ -259,11 +259,29 @@ proc extractFieldsAlias*(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
           result = false
           break)
 
+proc extractFieldsAlias*(fields: seq[FieldsPair]): seq[FieldsPair] {.gcsafe.} =
+  
+  let fields = fields.map(proc (x: FieldsPair): FieldsPair =
+    (x.name.replace("-as-", " AS ").replace("-AS-", " AS "), x.val, x.nodeKind))
+  
+  return fields.filter(proc (x: FieldsPair): bool =
+    result = true
+    if not x.name.contains("AS "):
+      for f in fields:
+        if f.name.contains(&" AS {x.name}"):
+          result = false
+          break)
+
 proc normalizeFieldsAlias*(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
   
   return fields.extractFieldsAlias.map(proc (x: FieldDesc): FieldDesc =
     (x.name.split(" AS ")[0].strip, x.nodeKind))
 
+proc normalizeFieldsAlias*(fields: seq[FieldsPair]): seq[FieldsPair] {.gcsafe.} =
+  
+  return fields.extractFieldsAlias.map(proc (x: FieldsPair): FieldsPair=
+    (x.name.split(" AS ")[0].strip, x.val, x.nodeKind))
+    
 proc extractQueryResults*(fields: seq[FieldDesc], queryResults: seq[string]): JsonNode {.gcsafe.} =
   
   result = %*{}
