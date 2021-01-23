@@ -11,13 +11,13 @@ type
 proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[FieldItem]] =
   
   #return (self.fields, sql self.stmt.join(" "), self.params)
-  return (self.fields, sql self.stmt.join(" ") & ";", self.params)
+  return (self.fields, sql self.stmt.join(" "), self.params)
 
 #proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[string]] =
 proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[FieldItem]] =
   
   #return (self.fields, self.stmt.join(" "), self.params)
-  return (self.fields, self.stmt.join(" ") & ";", self.params)
+  return (self.fields, self.stmt.join(" "), self.params)
 
 proc `$`*(self: Sql): string =
   return $self.toQs
@@ -553,38 +553,28 @@ proc bracket*(
   query: Sql): Sql =
 
   let q = query.toQs
-  self.stmt.add(&"({q.query})")
+  self.stmt.add((&"({q.query})")
+    .replace("(WHERE", "WHERE (")
+    .replace("(AND", "AND (")
+    .replace("(LIKE", "LIKE (")
+    .replace("(ILIKE", "ILIKE (")
+    .replace("(COUNT", "COUNT (")
+    .replace("(NOT", "NOT (")
+    .replace("(NOT IN", "NOT IN (")
+    .replace("(AVG", "AVG (")
+    .replace("(SUM", "SUM (")
+    .replace("(MIN", "MIN (")
+    .replace("(MAX", "MAX (")
+    .replace("(CASE", "CASE (")
+    .replace("(HAVING", "HAVING (")
+    .replace("(ANY", "ANY (")
+    .replace("(ALL", "ALL ("))
   self.params &= q.params
-  return self
-
-proc `and`*(self: Sql): Sql =
-
-  self.stmt.add("AND")
-  return self
-
-proc `or`*(self: Sql): Sql =
-
-  self.stmt.add("OR")
-  return self
-
-proc `not`*(self: Sql): Sql =
-
-  self.stmt.add("NOT")
-  return self
-
-proc `in`*(self: Sql): Sql =
-
-  self.stmt.add("IN")
-  return self
-
-proc `notIn`*(self: Sql): Sql =
-
-  self.stmt.add("NOT IN")
   return self
 
 proc startTransaction*(self: Sql): Sql =
 
-  self.stmt.add("START TRANSACTION;")
+  self.stmt.add("START TRANSACTION")
 
   return self
 
@@ -592,12 +582,12 @@ proc savePointTransaction*(
   self: Sql,
   savePoint: string): Sql =
 
-  self.stmt.add(&"SAVEPOINT {savePoint};")
+  self.stmt.add(&"SAVEPOINT {savePoint}")
   return self
 
 proc commitTransaction*(self: Sql): Sql =
 
-  self.stmt.add("COMMIT;")
+  self.stmt.add("COMMIT")
   return self
 
 proc rollbackTransaction*(
@@ -605,9 +595,9 @@ proc rollbackTransaction*(
   savePoint: string = ""): Sql =
 
   if savePoint != "":
-    self.stmt.add(&"ROLLBACK TO {savePoint};")
+    self.stmt.add(&"ROLLBACK TO {savePoint}")
   else:
-    self.stmt.add("ROLLBACK;")
+    self.stmt.add("ROLLBACK")
   return self
 
 proc toDbType*(
