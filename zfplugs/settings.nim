@@ -10,18 +10,7 @@
 import os, json
 import zfcore
 
-# thead safe
-var settings {.threadvar.}: Settings
-settings.deepCopy(zfcoreInstance.settings)
-
 proc jsonSettings*(): JsonNode {.gcsafe.} =
-  let jsonSettingsFile = joinPath(getAppDir(), "settings.json")
-  if existsFile(jsonSettingsFile):
-    try:
-      result = parseFile(jsonSettingsFile)
-
-    except Exception as ex:
-      echo ex.msg
-
-  else:
+  result = zfJsonSettings()
+  if result.len == 0:
     result = %settings
