@@ -10,6 +10,9 @@
 import os, json
 import zfcore
 
+var settings {.threadvar.}: Settings
+settings.deepCopy(zfcoreInstance.settings)
+
 proc jsonSettings*(): JsonNode {.gcsafe.} =
   result = zfJsonSettings()
   if result.len == 0:
