@@ -35,7 +35,7 @@ proc isCsrfValid*(token: string): bool {.gcsafe.} =
   #
   # check if csrf valid
   #
-  return csrfDir.joinPath(token).existsFile
+  result = csrfDir.joinPath(token).existsFile
 
 proc delCsrf*(token: string) {.gcsafe.} =
   #

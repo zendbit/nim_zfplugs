@@ -7,33 +7,29 @@ type
     stmt*: seq[string]
     params*: seq[FieldItem]
 
-#proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[string]] =
 proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[FieldItem]] =
   
-  #return (self.fields, sql self.stmt.join(" "), self.params)
-  return (self.fields, sql self.stmt.join(" "), self.params)
+  result = (self.fields, sql self.stmt.join(" "), self.params)
 
-#proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[string]] =
 proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[FieldItem]] =
   
-  #return (self.fields, self.stmt.join(" "), self.params)
-  return (self.fields, self.stmt.join(" "), self.params)
+  result = (self.fields, self.stmt.join(" "), self.params)
 
 proc `$`*(self: Sql): string =
-  return $self.toQs
+  result = $self.toQs
 
 proc `&`*(self: Sql, other: Sql): Sql =
   if other.stmt.len != 0:
     self.stmt &= other.stmt
     self.params &= other.params
   
-  return self
+  result = self
 
 proc extractFields(
   self: Sql,
   fields: openArray[string]): seq[string] =
 
-  return fields.map(proc (x: string): string =
+  result = fields.map(proc (x: string): string =
     let field = x.toLower.split(" as ")
     result = field[field.high])
 
@@ -42,21 +38,21 @@ proc dropDatabase*(
   database: string): Sql =
 
   self.stmt.add(&"DROP DATABASE {database}")
-  return self
+  result = self
 
 proc dropTable*(
   self: Sql,
   table: string): Sql =
 
   self.stmt.add(&"DROP TABLE {table}")
-  return self
+  result = self
 
 proc truncateTable*(
   self: Sql,
   table: string): Sql =
 
   self.stmt.add(&"TRUNCATE TABLE {table}")
-  return self
+  result = self
 
 #### query generator helper
 proc select*(
@@ -71,7 +67,7 @@ proc select*(
   
   self.stmt.add(&"""SELECT {mapFields.join(", ")}""")
 
-  return self
+  result = self
 
 proc select*(
   self: Sql,
@@ -95,12 +91,11 @@ proc select*(
   self.fields &= self.extractFields(fieldsList)
 
   self.stmt.add(&"""SELECT {fieldsList.join(", ")}""")
-  return self
+  result = self
 
 proc select*(
   self: Sql,
   fields: openArray[string],
-  #fieldsCase: openArray[tuple[caseCond: seq[tuple[cond: string, then: string]], fieldAlias: string]]): Sql =
   fieldsCase: openArray[tuple[caseCond: seq[tuple[cond: string, then: FieldItem]], fieldAlias: string]]): Sql =
   
   let fields = self.fields.map(proc (x: string): string = &"{{table}}.{x}")
@@ -113,7 +108,6 @@ proc select*(
         result = &"{{table}}.{x}")
 
   var caseStmt: seq[string]
-  #var caseParams: seq[string]
   var caseParams: seq[FieldItem]
   for fc in fieldsCase:
     caseStmt = @[]
@@ -137,7 +131,7 @@ proc select*(
 
   self.stmt.add(&"""SELECT {fieldsList.join(", ")}""")
 
-  return self
+  result = self
 
 proc fromTable*(
   self: Sql,
@@ -146,7 +140,7 @@ proc fromTable*(
   self.fields = self.fields.map(proc (x: string): string = x.replace("{table}", table))
   self.stmt.add(&"""FROM {table}""")
   self.stmt[0] = self.stmt[0].replace("{table}", table)
-  return self
+  result = self
 
 proc fromSql*[T: string | Sql](
   self: Sql,
@@ -163,13 +157,12 @@ proc fromSql*[T: string | Sql](
   if params.len != 0:
     self.params &= params
 
-  return self
+  result = self
 
 proc whereCond*[T: string | Sql](
   self: Sql,
   whereType: string,
   where: T,
-  #params: varargs[string, `$`]): Sql =
   params: varargs[FieldItem]): Sql =
   
   if T is string:
@@ -183,55 +176,49 @@ proc whereCond*[T: string | Sql](
   if params.len != 0:
     self.params &= params
 
-  return self
+  result = self
 
 proc where*[T: string | Sql](
   self: Sql,
   where: T,
-  #params: varargs[string, `$`]): Sql =
   params: varargs[FieldItem]): Sql =
   
-  return self.whereCond("WHERE", where, params)
+  result = self.whereCond("WHERE", where, params)
 
 proc whereExists*[T: string | Sql](
   self: Sql,
   where: T,
-  #params: varargs[string, `$`]): Sql =
   params: varargs[FieldItem]): Sql =
   
-  return self.whereCond("WHERE EXISTS", where, params)
+  result = self.whereCond("WHERE EXISTS", where, params)
 
 proc andExists*[T: string | Sql](
   self: Sql,
   where: T,
-  #params: varargs[string, `$`]): Sql =
   params: varargs[FieldItem]): Sql =
   
-  return self.whereCond("AND EXISTS", where, params)
+  result = self.whereCond("AND EXISTS", where, params)
 
 proc orExists*[T: string | Sql](
   self: Sql,
   where: T,
-  #params: varargs[string, `$`]): Sql =
   params: varargs[FieldItem]): Sql =
   
-  return self.whereCond("OR EXISTS", where, params)
+  result = self.whereCond("OR EXISTS", where, params)
 
 proc andWhere*[T: string | Sql](
   self: Sql,
   where: T,
-  #params: varargs[string, `$`]): Sql =
   params: varargs[FieldItem]): Sql =
   
-  return self.whereCond("AND", where, params)
+  result = self.whereCond("AND", where, params)
 
 proc orWhere*[T: string | Sql](
   self: Sql,
   where: T,
-  #params: varargs[string, `$`]): Sql =
   params: varargs[FieldItem]): Sql =
   
-  return self.whereCond("OR", where, params)
+  result = self.whereCond("OR", where, params)
 
 proc likeCond*[T](
   self: Sql,
@@ -240,28 +227,28 @@ proc likeCond*[T](
   pattern: T): Sql =
   
   self.stmt.add(&"{cond} {field} LIKE {pattern}")
-  return self
+  result = self
 
 proc whereLike*[T](
   self: Sql,
   field: string,
   pattern: T): Sql =
 
-  return self.likeCond("WHERE", field, pattern)
+  result = self.likeCond("WHERE", field, pattern)
 
 proc andLike*[T](
   self: Sql,
   field: string,
   pattern: T): Sql =
   
-  return self.likeCond("AND", field, pattern)
+  result = self.likeCond("AND", field, pattern)
 
 proc orLike*[T](
   self: Sql,
   field: string,
   pattern: T): Sql =
   
-  return self.likeCond("OR", field, pattern)
+  result = self.likeCond("OR", field, pattern)
 
 proc unionCond*(
   self: Sql,
@@ -273,19 +260,19 @@ proc unionCond*(
   if q.params.len != 0:
     self.params &= q.params
 
-  return self
+  result = self
 
 proc union*(
   self: Sql,
   unionWith: Sql): Sql =
 
-  return self.unionCond("", unionWith)
+  result = self.unionCond("", unionWith)
 
 proc unionAll*(
   self: Sql,
   unionWith: Sql): Sql =
 
-  return self.unionCond("All", unionWith)
+  result = self.unionCond("All", unionWith)
 
 proc whereInCond*[T](
   self: Sql,
@@ -297,7 +284,6 @@ proc whereInCond*[T](
   if T isnot Sql:
     let inParams = cast[seq[FieldItem]](params)
     if inParams.len != 0:
-      #let inStmtParams = inParams.map(proc (x: string): string = "?")
       var inStmtParams: seq[string] = @[]
       for i in 0..inParams.high:
         inStmtParams.add("?")
@@ -309,114 +295,108 @@ proc whereInCond*[T](
     if q.params.len != 0:
       self.params &= q.params
 
-  return self
+  result = self
 
 proc whereIn*[T](
   self: Sql,
   field: string,
   params: T): Sql =
   
-  return self.whereInCond("WHERE", "", field, params)
+  result = self.whereInCond("WHERE", "", field, params)
 
 proc andIn*[T](
   self: Sql,
   field: string,
   params: T): Sql =
   
-  return self.whereInCond("AND", "", field, params)
+  result = self.whereInCond("AND", "", field, params)
 
 proc orIn*[T](
   self: Sql,
   field: string,
   params: T): Sql =
   
-  return self.whereInCond("OR", "", field, params)
+  result = self.whereInCond("OR", "", field, params)
 
 proc andNotIn*[T](
   self: Sql,
   field: string,
   params: T): Sql =
   
-  return self.whereInCond("AND", "NOT", field, params)
+  result = self.whereInCond("AND", "NOT", field, params)
 
 proc orNotIn*[T](
   self: Sql,
   field: string,
   params: T): Sql =
   
-  return self.whereInCond("OR", "NOT", field, params)
+  result = self.whereInCond("OR", "NOT", field, params)
 
 proc betweenCond*(
   self: Sql,
   whereType: string,
   cond: string,
   field: string,
-  #param: tuple[startVal: string, endVal: string]): Sql =
   param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
   self.stmt.add(&"""{whereType} {field} {cond} BETWEEN {param.startVal} AND {param.endVal}""")
-  return self
+  result = self
 
 proc whereBetween*(
   self: Sql,
   field: string,
-  #param: tuple[startVal: string, endVal: string]): Sql =
   param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
-  return self.betweenCond("WHERE", "", field, param)
+  result = self.betweenCond("WHERE", "", field, param)
 
 proc andBetween*(
   self: Sql,
   field: string,
-  #param: tuple[startVal: string, endVal: string]): Sql =
   param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
-  return self.betweenCond("AND", "", field, param)
+  result = self.betweenCond("AND", "", field, param)
 
 proc orBetween*(
   self: Sql,
   field: string,
-  #param: tuple[startVal: string, endVal: string]): Sql =
   param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
-  return self.betweenCond("OR", "", field, param)
+  result = self.betweenCond("OR", "", field, param)
 
 proc andNotBetween*(
   self: Sql,
   field: string,
-  #param: tuple[startVal: string, endVal: string]): Sql =
   param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
-  return self.betweenCond("AND", "NOT", field, param)
+  result = self.betweenCond("AND", "NOT", field, param)
 
 proc orNotBetween*(
   self: Sql,
   field: string,
-  #param: tuple[startVal: string, endVal: string]): Sql =
   param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
   
-  return self.betweenCond("OR", "NOT", field, param)
+  result = self.betweenCond("OR", "NOT", field, param)
 
 proc limit*(
   self: Sql,
   limit: int64): Sql =
 
   self.stmt.add(&"LIMIT {limit}")
-  return self
+  result = self
 
 proc offset*(
   self: Sql,
   offset: int64): Sql =
 
   self.stmt.add(&"OFFSET {offset}")
-  return self
+  result = self
 
 proc groupBy*(
   self: Sql,
   fields: varargs[string, `$`]): Sql =
   
   self.stmt.add(&"""GROUP BY {fields.join(", ")}""")
-  return self
+  result = self
 
 proc orderByCond*(
   self: Sql,
@@ -424,19 +404,19 @@ proc orderByCond*(
   fields: varargs[string, `$`]): Sql =
   
   self.stmt.add(&"""ORDER BY {fields.join(", ")} {orderType}""")
-  return self
+  result = self
 
 proc descOrderBy*(
   self: Sql,
   fields: varargs[string, `$`]): Sql =
   
-  return self.orderByCond("DESC", fields)
+  result = self.orderByCond("DESC", fields)
 
 proc ascOrderBy*(
   self: Sql,
   fields: varargs[string, `$`]): Sql =
   
-  return self.orderByCond("ASC", fields)
+  result = self.orderByCond("ASC", fields)
 
 proc innerJoin*(
   self: Sql,
@@ -444,7 +424,7 @@ proc innerJoin*(
   joinOn: varargs[string, `$`]): Sql =
   
   self.stmt.add(&"""INNER JOIN {table} ON {joinOn.join(", ")}""")
-  return self
+  result = self
 
 proc leftJoin*(
   self: Sql,
@@ -452,7 +432,7 @@ proc leftJoin*(
   joinOn: varargs[string, `$`]): Sql =
   
   self.stmt.add(&"""LEFT JOIN {table} ON {joinOn.join(", ")}""")
-  return self
+  result = self
 
 proc rightJoin*(
   self: Sql,
@@ -460,7 +440,7 @@ proc rightJoin*(
   joinOn: varargs[string, `$`]): Sql =
   
   self.stmt.add(&"""RIGHT JOIN {table} ON {joinOn.join(", ")}""")
-  return self
+  result = self
 
 proc fullJoin*(
   self: Sql,
@@ -468,19 +448,18 @@ proc fullJoin*(
   joinOn: varargs[string, `$`]): Sql =
   
   self.stmt.add(&"""FULL OUTER JOIN {table} ON {joinOn.join(", ")}""")
-  return self
+  result = self
 
 proc having*(
   self: Sql,
   having: string,
-  #params: varargs[string, `$`]): Sql =
   params: varargs[FieldItem]): Sql =
   
   self.stmt.add(&"""HAVING {having}""")
   if params.len != 0:
     self.params &= params
 
-  return self
+  result = self
 
 proc insert*(
   self: Sql,
@@ -489,47 +468,41 @@ proc insert*(
 
   self.fields &= self.extractFields(fields)
   self.stmt.add(&"""INSERT INTO {table} ({fields.join(", ")})""")
-  return self
+  result = self
 
 proc values*(
   self: Sql,
-  #values: varargs[seq[string]]): Sql =
   values: varargs[seq[FieldItem]]): Sql =
 
   if self.stmt[0].contains("INSERT"):
     var insertVal: seq[string] = @[]
     for v in values:
-      #let val = v.map(proc (x: string): string = "?").join(", ")
       var val: seq[string] = @[]
       for fi in v:
         val.add("?")
-      #insertVal.add(&"""({val})""")
       insertVal.add(&"""({val.join(", ")})""")
       self.params &= v
     self.stmt.add(&"""VALUES ({insertVal.join(" ,")})""")
   else:
     raise newException(ValueError, "multi values only for INSERT")
 
-  return self
+  result = self
 
 proc value*(
   self: Sql,
-  #values: varargs[string, `$`]): Sql =
   values: varargs[FieldItem]): Sql =
 
   let stmt = self.stmt[0]
   if stmt.contains("INSERT") or stmt.contains("UPDATE"):
     if stmt.contains("INSERT"):
-      #let insertVal = values.map(proc (x: string): string = "?").join(", ")
       var insertVal: seq[string] = @[]
       for fi in values:
         insertVal.add("?")
-      #self.stmt.add(&"VALUES ({insertVal})")
       self.stmt.add(&"""VALUES ({insertVal.join(", ")})""")
     self.params &= values
   else:
     raise newException(ValueError, "values only for INSERT OR UPDATE.")
-  return self
+  result = self
 
 proc update*(
   self: Sql,
@@ -539,14 +512,14 @@ proc update*(
   self.fields &= self.extractFields(fields)
   let setFields = fields.map(proc (x: string): string = &"{x}=?").join(", ")
   self.stmt.add(&"""UPDATE {table} SET {setFields}""")
-  return self
+  result = self
 
 proc delete*(
   self: Sql,
   table: string): Sql =
 
   self.stmt.add(&"""DELETE FROM {table}""")
-  return self
+  result = self
 
 proc bracket*(
   self: Sql,
@@ -570,25 +543,25 @@ proc bracket*(
     .replace("(ANY", "ANY (")
     .replace("(ALL", "ALL ("))
   self.params &= q.params
-  return self
+  result = self
 
 proc startTransaction*(self: Sql): Sql =
 
   self.stmt.add("START TRANSACTION")
 
-  return self
+  result = self
 
 proc savePointTransaction*(
   self: Sql,
   savePoint: string): Sql =
 
   self.stmt.add(&"SAVEPOINT {savePoint}")
-  return self
+  result = self
 
 proc commitTransaction*(self: Sql): Sql =
 
   self.stmt.add("COMMIT")
-  return self
+  result = self
 
 proc rollbackTransaction*(
   self: Sql,
@@ -598,7 +571,7 @@ proc rollbackTransaction*(
     self.stmt.add(&"ROLLBACK TO {savePoint}")
   else:
     self.stmt.add("ROLLBACK")
-  return self
+  result = self
 
 proc toDbType*(
   field: string,

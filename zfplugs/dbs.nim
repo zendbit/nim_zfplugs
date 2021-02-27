@@ -42,7 +42,7 @@ proc newDbs*[T](
     port: port
   )
 
-  return instance
+  result = instance
 
 proc tryConnect*[T](self: Dbs[T]): DbsResult[T] {.gcsafe.} =
   ##

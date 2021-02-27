@@ -25,7 +25,7 @@ proc isSessionExists(sessionToken: string): bool {.gcsafe.} =
   #
   # check if session exists with given session token
   #
-  return sessionDir.joinPath(sessionToken).existsFile
+  result = sessionDir.joinPath(sessionToken).existsFile
 
 proc writeSession(
   sessionToken: string,
@@ -44,7 +44,7 @@ proc createSessionToken(): string {.gcsafe.} =
   #
   let token = $secureHash(now().utc().format("YYYY-MM-dd HH:mm:ss:fffffffff"))
   token.writeSession(%*{})
-  return token
+  result = token
 
 proc createSessionFromToken(token: string): bool {.gcsafe.} =
   #

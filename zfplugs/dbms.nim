@@ -120,10 +120,10 @@ proc tryConnect*[T](self: DBMS[T]): bool {.gcsafe.} =
     self.dbInfo.port).tryConnect()
   self.conn = c.conn
   self.connected = c.success
-  return self.connected
+  result = self.connected
 
 proc quote(str: string): string =
-  return (fmt"{str}")
+  result = (fmt"{str}")
     .replace(fmt"\", fmt"\\")
     .replace(fmt"'", fmt"\'")
     .replace(fmt""""""", fmt"""\"""")
@@ -153,7 +153,7 @@ proc extractKeyValue*[T](
     else:
       values.add(v.getStr)
 
-  return (keys, values, nodesKind)
+  result = (keys, values, nodesKind)
 
 proc quote(q: Sql): string =
   let q = q.toQs
@@ -163,7 +163,7 @@ proc quote(q: Sql): string =
     let v = if p.nodeKind == JString: &"'{quote(p.val)}'" else: p.val
     queries.insert([v], (i*2) + 1)
 
-  return queries.join("")
+  result = queries.join("")
 
 # insert into database
 proc insertId*[T](
@@ -174,25 +174,25 @@ proc insertId*[T](
   var q = Sql()
   try:
     if not self.connected:
-      return (false, 0'i64, "can't connect to the database.")
+      result = (false, 0'i64, "can't connect to the database.")
+    else:
+      let kv = self.extractKeyValue(obj)
+      var fieldItems: seq[FieldItem] = @[]
+      for i in 0..kv.keys.high:
+        fieldItems.add((kv.values[i], kv.nodesKind[i]))
 
-    let kv = self.extractKeyValue(obj)
-    var fieldItems: seq[FieldItem] = @[]
-    for i in 0..kv.keys.high:
-      fieldItems.add((kv.values[i], kv.nodesKind[i]))
-
-    q = Sql()
-      .insert(table, kv.keys)
-      .value(fieldItems)
-    
-    return (true,
-      self.conn.insertId(sql quote(q)),
-      "ok")
+      q = Sql()
+        .insert(table, kv.keys)
+        .value(fieldItems)
+      
+      result = (true,
+        self.conn.insertId(sql quote(q)),
+        "ok")
 
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
-    return (false, 0'i64, ex.msg)
+    result = (false, 0'i64, ex.msg)
 
 proc update*[T](
   self: DBMS,
@@ -204,25 +204,25 @@ proc update*[T](
   var q = Sql()
   try:
     if not self.connected:
-      return (false, 0'i64, "can't connect to the database.")
-
-    let kv = self.extractKeyValue(obj)
-    var fieldItems: seq[FieldItem] = @[]
-    for i in 0..kv.keys.high:
-      fieldItems.add((kv.values[i], kv.nodesKind[i]))
-    
-    q = Sql()
-      .update(table, kv.keys)
-      .value(fieldItems) & query
-    
-    return (true,
-      self.conn.execAffectedRows(sql quote(q)),
-      "ok")
+      result = (false, 0'i64, "can't connect to the database.")
+    else:
+      let kv = self.extractKeyValue(obj)
+      var fieldItems: seq[FieldItem] = @[]
+      for i in 0..kv.keys.high:
+        fieldItems.add((kv.values[i], kv.nodesKind[i]))
+      
+      q = Sql()
+        .update(table, kv.keys)
+        .value(fieldItems) & query
+      
+      result = (true,
+        self.conn.execAffectedRows(sql quote(q)),
+        "ok")
 
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
-    return (false, 0'i64, ex.msg)
+    result = (false, 0'i64, ex.msg)
 
 proc exec*(
   self: DBMS,
@@ -234,24 +234,24 @@ proc exec*(
   var q = Sql()
   try:
     if not self.connected:
-      return (false, "can't connect to the database.")
-
-    q = query
-    
-    self.conn.exec(sql quote(q))
-    return (true, "ok")
+      result = (false, "can't connect to the database.")
+    else:
+      q = query
+      
+      self.conn.exec(sql quote(q))
+      result = (true, "ok")
 
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
-    return (false, ex.msg)
+    result = (false, ex.msg)
 
 proc extractFieldsAlias*(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
   
   let fields = fields.map(proc (x: FieldDesc): FieldDesc =
     (x.name.replace("-as-", " AS ").replace("-AS-", " AS "), x.nodeKind))
   
-  return fields.filter(proc (x: FieldDesc): bool =
+  result = fields.filter(proc (x: FieldDesc): bool =
     result = true
     if not x.name.contains("AS "):
       for f in fields:
@@ -264,7 +264,7 @@ proc extractFieldsAlias*(fields: seq[FieldsPair]): seq[FieldsPair] {.gcsafe.} =
   let fields = fields.map(proc (x: FieldsPair): FieldsPair =
     (x.name.replace("-as-", " AS ").replace("-AS-", " AS "), x.val, x.nodeKind))
   
-  return fields.filter(proc (x: FieldsPair): bool =
+  result = fields.filter(proc (x: FieldsPair): bool =
     result = true
     if not x.name.contains("AS "):
       for f in fields:
@@ -274,12 +274,12 @@ proc extractFieldsAlias*(fields: seq[FieldsPair]): seq[FieldsPair] {.gcsafe.} =
 
 proc normalizeFieldsAlias*(fields: seq[FieldDesc]): seq[FieldDesc] {.gcsafe.} =
   
-  return fields.extractFieldsAlias.map(proc (x: FieldDesc): FieldDesc =
+  result = fields.extractFieldsAlias.map(proc (x: FieldDesc): FieldDesc =
     (x.name.split(" AS ")[0].strip, x.nodeKind))
 
 proc normalizeFieldsAlias*(fields: seq[FieldsPair]): seq[FieldsPair] {.gcsafe.} =
   
-  return fields.extractFieldsAlias.map(proc (x: FieldsPair): FieldsPair=
+  result = fields.extractFieldsAlias.map(proc (x: FieldsPair): FieldsPair=
     (x.name.split(" AS ")[0].strip, x.val, x.nodeKind))
     
 proc extractQueryResults*(fields: seq[FieldDesc], queryResults: seq[string]): JsonNode {.gcsafe.} =
@@ -300,19 +300,19 @@ proc getRow*[T](
   var q = Sql()
   try:
     if not self.connected:
-      return (false, obj, "can't connect to the database.")
-
-    let fields = extractFieldsAlias(obj.fieldsDesc)
-    q = (Sql()
-      .select(fields.map(proc(x: FieldDesc): string = x.name))
-      .fromTable(table) & query)
-     
-    let queryResults = self.conn.getRow(sql quote(q))
-    return (true, extractQueryResults(fields, queryResults).to(T), "ok")
+      result = (false, obj, "can't connect to the database.")
+    else:
+      let fields = extractFieldsAlias(obj.fieldsDesc)
+      q = (Sql()
+        .select(fields.map(proc(x: FieldDesc): string = x.name))
+        .fromTable(table) & query)
+       
+      let queryResults = self.conn.getRow(sql quote(q))
+      result = (true, extractQueryResults(fields, queryResults).to(T), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
-    return (false, obj, ex.msg)
+    result = (false, obj, ex.msg)
 
 proc getAllRows*[T](
   self: DBMS,
@@ -326,23 +326,23 @@ proc getAllRows*[T](
   var q = Sql()
   try:
     if not self.connected:
-      return (false, @[], "can't connect to the database.")
-    
-    let fields = extractFieldsAlias(obj.fieldsDesc)
-    q = (Sql()
-      .select(fields.map(proc(x: FieldDesc): string = x.name))
-      .fromTable(table) & query)
+      result = (false, @[], "can't connect to the database.")
+    else:
+      let fields = extractFieldsAlias(obj.fieldsDesc)
+      q = (Sql()
+        .select(fields.map(proc(x: FieldDesc): string = x.name))
+        .fromTable(table) & query)
 
-    let queryResults = self.conn.getAllRows(sql quote(q))
-    var res: seq[T] = @[]
-    if queryResults.len > 0 and queryResults[0][0] != "":
-      for qres in queryResults:
-        res.add(extractQueryResults(fields, qres).to(T))
-    return (true, res, "ok")
+      let queryResults = self.conn.getAllRows(sql quote(q))
+      var res: seq[T] = @[]
+      if queryResults.len > 0 and queryResults[0][0] != "":
+        for qres in queryResults:
+          res.add(extractQueryResults(fields, qres).to(T))
+      result = (true, res, "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
-    return (false, @[], ex.msg)
+    result = (false, @[], ex.msg)
 
 proc execAffectedRows*(
   self: DBMS,
@@ -354,14 +354,15 @@ proc execAffectedRows*(
   var q = Sql()
   try:
     if not self.connected:
-      return (false, 0'i64, "can't connect to the database.")
-    q = query
+      result = (false, 0'i64, "can't connect to the database.")
+    else:
+      q = query
 
-    result = (true, self.conn.execAffectedRows(sql quote(q)), "ok")
+      result = (true, self.conn.execAffectedRows(sql quote(q)), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
-    return (false, 0'i64, ex.msg)
+    result = (false, 0'i64, ex.msg)
 
 proc delete*[T](
   self: DBMS,
@@ -375,16 +376,16 @@ proc delete*[T](
   var q = Sql()
   try:
     if not self.connected:
-      return (false, 0'i64, "can't connect to the database.")
-
-    q = (Sql()
-      .delete(table) & query)
-    
-    result = (true, self.conn.execAffectedRows(sql quote(q)), "ok")
+      result = (false, 0'i64, "can't connect to the database.")
+    else:
+      q = (Sql()
+        .delete(table) & query)
+      
+      result = (true, self.conn.execAffectedRows(sql quote(q)), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo quote(q)
-    return (false, 0'i64, ex.msg)
+    result = (false, 0'i64, ex.msg)
 
 proc setEncoding(
   self: DBMS,
@@ -393,11 +394,12 @@ proc setEncoding(
   ### sets the encoding of a database connection, returns true for success, false for failure
   ###
   if not self.connected:
-    return false
-  return self.conn.setEncoding(encoding)
+    result = false
+  else:
+    result = self.conn.setEncoding(encoding)
 
 proc getDbInfo*(self: DBMS): DbInfo {.gcsafe.} =
-  return self.dbInfo
+  result = self.dbInfo
 
 # close the database connection
 proc close*(self: DBMS) {.gcsafe.} =
@@ -411,9 +413,10 @@ proc close*(self: DBMS) {.gcsafe.} =
 proc ping*(self: DBMS): bool {.gcsafe.} =
   try:
     if not self.connected:
-      return self.connected
-    discard self.conn.getRow(sql "SELECT 1")
-    result = true
+      result = self.connected
+    else:
+      discard self.conn.getRow(sql "SELECT 1")
+      result = true
   except Exception as e:
     echo e.msg
     self.close
@@ -430,48 +433,41 @@ proc startTransaction*(self: DBMS): ExecResult {.gcsafe discardable.} =
 
 proc commitTransaction*(self: DBMS): ExecResult {.gcsafe discardable.} =
 
-  return self.exec(Sql().commitTransaction)
+  result = self.exec(Sql().commitTransaction)
 
 proc savePointTransaction*(
   self: DBMS,
   savePoint: string): ExecResult {.gcsafe discardable.} =
 
-  return self.exec(Sql().savePointTransaction(savePoint))
+  result = self.exec(Sql().savePointTransaction(savePoint))
 
 proc rollbackTransaction*(
   self: DBMS,
   savePoint: string = ""): ExecResult {.gcsafe discardable.} =
 
-  return self.exec(Sql().rollbackTransaction(savePoint))
-
-  return self.exec(Sql().commitTransaction)
+  result = self.exec(Sql().rollbackTransaction(savePoint))
+  if result.ok:
+    result = self.exec(Sql().commitTransaction)
 
 proc toWhereQuery*(
   j: JsonNode,
   tablePrefix: string = "",
-  #op: string = "AND"): tuple[where: string, params: seq[string]] =
   op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
 
   var where: seq[string] = @[]
-  #var whereParams: seq[string] = @[]
   let fp = j.fieldsPair.normalizeFieldsAlias
   var whereParams: seq[FieldItem] = @[]
-  #for k, v in j:
   for (k, v, kind) in fp:
-    #if v.kind == JNull: continue
     if kind == JNull: continue
     where.add(if tablePrefix == "": &"{k}=?" else: &"{tablePrefix}.{k}=?")
-    #whereParams.add(if v.kind == JString: v.getStr else: $v)
-    #whereParams.add(if v.kind == JString: (v.getStr, v.kind) else: ($v, v.kind))
     whereParams.add((v, kind))
 
-  return (where.join(&" {op} "), whereParams)
+  result = (where.join(&" {op} "), whereParams)
 
 proc toWhereQuery*[T](
   obj: T,
   tablePrefix: string = "",
-  #op: string = "AND"): tuple[where: string, params: seq[string]] =
   op: string = "AND"): tuple[where: string, params: seq[FieldItem]] =
 
-  return (%obj).toWhereQuery(tablePrefix, op)
+  result = (%obj).toWhereQuery(tablePrefix, op)
 
