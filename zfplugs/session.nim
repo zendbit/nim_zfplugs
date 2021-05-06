@@ -1,11 +1,11 @@
-#[
-  zfcore web framework for nim language
-  This framework if free to use and to modify
-  License: BSD
-  Author: Amru Rosyada
-  Email: amru.rosyada@gmail.com
-  Git: https://github.com/zendbit
-]#
+##
+##  zfcore web framework for nim language
+##  This framework if free to use and to modify
+##  License: BSD
+##  Author: Amru Rosyada
+##  Email: amru.rosyada@gmail.com
+##  Git: https://github.com/zendbit/nim.zfplugs
+##
 
 import std.sha1, macros
 import zfcore, stdext/[encrypt_ext]
@@ -22,43 +22,53 @@ if sessionDir.existsDir:
   zfcoreInstance.settings.addTmpCleanupDir("session", 2592000)
 
 proc isSessionExists(sessionToken: string): bool {.gcsafe.} =
-  #
-  # check if session exists with given session token
-  #
+  ##
+  ##  check if session already exists:
+  ##
+  ##  this will check the session token.
+  ##
   result = sessionDir.joinPath(sessionToken).existsFile
 
 proc writeSession(
   sessionToken: string,
   data: JsonNode): bool {.discardable gcsafe.} =
-  #
-  # write session data with given session token and data
-  #
+  ##
+  ##  write session data:
+  ##
+  ##  the session data information in json format and will encrypted for security reason.
+  ##
   let f = sessionDir.joinPath(sessionToken).open(fmWrite)
   f.write(xorEncodeDecode($data, sessionToken))
   f.close
   result = sessionToken.isSessionExists
 
 proc createSessionToken(): string {.gcsafe.} =
-  #
-  # the session token will be used for accessing the session
-  #
+  ##
+  ##  create sossion token:
+  ##
+  ##  create string token session.
+  ##
   let token = $secureHash(now().utc().format("YYYY-MM-dd HH:mm:ss:fffffffff"))
   token.writeSession(%*{})
   result = token
 
 proc createSessionFromToken(token: string): bool {.gcsafe.} =
-  #
-  # this will generate session with given token and sessionAge in seconds.
-  # will check if session conflict with other session or not
-  # the session token will be used for accessing the session
-  #
+  ##
+  ##  create session from token:
+  ##
+  ##  this will generate session with given token and sessionAge in seconds.
+  ##  will check if session conflict with other session or not
+  ##  the session token will be used for accessing the session
+  ##
   if not token.isSessionExists:
     token.writeSession(%*{})
 
 proc readSession(sessionToken: string): JsonNode {.gcsafe.} =
-  #
-  # read session data with given token
-  #
+  ##
+  ##  read session:
+  ##
+  ##  read session data with given token.
+  ##
   if sessionToken.isSessionExists:
     let f = sessionDir.joinPath(sessionToken).open
     result = f.readAll().xorEncodeDecode(sessionToken).parseJson
@@ -67,9 +77,11 @@ proc readSession(sessionToken: string): JsonNode {.gcsafe.} =
 proc getSession*(
   ctx: HttpContext,
   key: string): JsonNode {.gcsafe.} =
-  #
-  # get session value with given session token and key
-  #
+  ##
+  ##  get session:
+  ##
+  ##  get session value with given key from zfcore HttpContext.
+  ##
   let sessionData = ctx.getCookie().getOrDefault(sessid).readSession()
   if not sessionData.isNil:
     result = sessionData{key}
@@ -79,9 +91,11 @@ proc getSession*(
 proc addSession*(
   ctx: HttpContext,
   key: string, value: JsonNode) {.gcsafe.} =
-  #
-  # add session
-  #
+  ##
+  ##  add session:
+  ##
+  ##  add session data to zfcore HttpContext. If key exists will overwrite existing data.
+  ##
   var sessionData: JsonNode
   let cookie = ctx.getCookie
   var token = cookie.getOrDefault(sessid)
@@ -104,18 +118,22 @@ proc addSession*(
 proc deleteSession*(
   ctx: HttpContext,
   key: string) {.gcsafe.} =
-  #
-  # delete session value with given session token and key
-  #
+  ##
+  ##  delete session:
+  ##
+  ##  delete session data with given key from zfcore HttpContext.
+  ##
   let sessionData = ctx.getCookie().getOrDefault(sessid).readSession
   if not sessionData.isNil:
     if sessionData.hasKey(key):
       sessionData.delete(key)
 
 proc destroySession*(ctx: HttpContext) {.gcsafe.} =
-  #
-  # destroy session data
-  #
+  ##
+  ##  destory session:
+  ##
+  ##  will destroy all session key and data from zfcore HttpContext.
+  ##
   var cookie = ctx.getCookie
   let token = cookie.getOrDefault(sessid)
   if token != "":
@@ -126,6 +144,11 @@ proc destroySession*(ctx: HttpContext) {.gcsafe.} =
 macro addSession*(
   key: string,
   value: JsonNode) =
+  ##
+  ##  add session macro:
+  ##
+  ##  create and add session data to zfcore HttpContext.
+  ##
   nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),
@@ -136,6 +159,11 @@ macro addSession*(
   )
 
 macro getSession*(key: string): untyped =
+  ##
+  ##  get session macro:
+  ##
+  ##  will return session value from zfcore HttpContext.
+  ##
   return nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),
@@ -145,6 +173,11 @@ macro getSession*(key: string): untyped =
   )
 
 macro deleteSession*(key: string): untyped =
+  ##
+  ##  delete session macro:
+  ##
+  ##  will delete session value with given key from zfcore HttpContext.
+  ##
   nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),
@@ -154,6 +187,11 @@ macro deleteSession*(key: string): untyped =
   )
 
 macro destroySession*(): untyped =
+  ##
+  ##  destroy session macro:
+  ##
+  ##  will destroy all session key and value from zfcore HttpContext.
+  ##
   nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),

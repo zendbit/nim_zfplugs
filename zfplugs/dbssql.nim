@@ -1,17 +1,34 @@
-import db_common, sequtils, strformat, strutils, json
+##
+##  zfcore web framework for nim language
+##  This framework if free to use and to modify
+##  License: BSD
+##  Author: Amru Rosyada
+##  Email: amru.rosyada@gmail.com
+##  Git: https://github.com/zendbit/nim.zfplugs
+##
+
+import db_common, sequtils, strformat, strutils, json, re
 import stdext/[strutils_ext, json_ext]
 
 type
+  SqlTransactionLevel* = enum
+    SERIALIZEABLE
+    REPEATABLE_READ
+    READ_COMMITED
+    READ_UNCOMMITED
+    READ_WRITE
+    READ_ONLY
+
   Sql* = ref object
     fields*: seq[string]
     stmt*: seq[string]
-    params*: seq[FieldItem]
+    params*: seq[JsonNode]
 
-proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[FieldItem]] =
+proc toQ*(self: Sql): tuple[fields: seq[string], query: SqlQuery, params: seq[JsonNode]] =
   
   result = (self.fields, sql self.stmt.join(" "), self.params)
 
-proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[FieldItem]] =
+proc toQs*(self: Sql): tuple[fields: seq[string], query: string, params: seq[JsonNode]] =
   
   result = (self.fields, self.stmt.join(" "), self.params)
 
@@ -24,6 +41,26 @@ proc `&`*(self: Sql, other: Sql): Sql =
     self.params &= other.params
   
   result = self
+
+proc `&`*(prefix: string, self: Sql): Sql =
+  self.stmt.insert(@[prefix], 0)
+  
+  result = self
+
+proc `&`*(self: Sql, sufix: string): Sql =
+  self.stmt.add(sufix)
+  
+  result = self
+
+proc append*[T: string|Sql](self: Sql, q: T, params: varargs[JsonNode, `%`]): Sql =
+  result = self & q
+  if params.len != 0:
+    result.params &= params
+
+proc prepend*[T: string|Sql](self: Sql, q: T, params: varargs[JsonNode, `%`]): Sql =
+  result = q & self
+  if params.len != 0:
+    result.params &= params
 
 proc extractFields(
   self: Sql,
@@ -57,12 +94,13 @@ proc truncateTable*(
 #### query generator helper
 proc select*(
   self: Sql,
-  fields: varargs[string, `$`]): Sql =
+  fields: varargs[string, `$`],
+  withTablePrefix: bool = true): Sql =
   
   self.fields &= self.extractFields(fields)
   let mapFields = fields.map(proc (x: string): string =
     result = x
-    if not x.toLower.contains(" as "):
+    if withTablePrefix and not x.toLower.contains(" as "):
       result = &"{{table}}.{x}")
   
   self.stmt.add(&"""SELECT {mapFields.join(", ")}""")
@@ -72,13 +110,14 @@ proc select*(
 proc select*(
   self: Sql,
   fields: openArray[string],
-  fieldsQuery: openArray[tuple[query: Sql, fieldAlias: string]]): Sql =
+  fieldsQuery: openArray[tuple[query: Sql, fieldAlias: string]],
+  withTablePrefix: bool = true): Sql =
   
   var fieldsList: seq[string]
   if fields.len > 0:
     fieldsList = fields.map(proc (x: string): string =
       result = x
-      if not x.toLower.contains(" as "):
+      if withTablePrefix and not x.toLower.contains(" as "):
         result = &"{{table}}.{x}")
 
   for fq in fieldsQuery:
@@ -96,7 +135,8 @@ proc select*(
 proc select*(
   self: Sql,
   fields: openArray[string],
-  fieldsCase: openArray[tuple[caseCond: seq[tuple[cond: string, then: FieldItem]], fieldAlias: string]]): Sql =
+  fieldsCase: openArray[tuple[caseCond: seq[tuple[cond: string, then: JsonNode]], fieldAlias: string]],
+  withTablePrefix: bool = true): Sql =
   
   let fields = self.fields.map(proc (x: string): string = &"{{table}}.{x}")
 
@@ -104,11 +144,11 @@ proc select*(
   if fields.len > 0:
     fieldsList &= fields.map(proc (x: string): string =
       result = x
-      if not x.toLower.contains(" as "):
+      if withTablePrefix and not x.toLower.contains(" as "):
         result = &"{{table}}.{x}")
 
   var caseStmt: seq[string]
-  var caseParams: seq[FieldItem]
+  var caseParams: seq[JsonNode]
   for fc in fieldsCase:
     caseStmt = @[]
     caseParams = @[]
@@ -144,7 +184,7 @@ proc fromTable*(
 
 proc fromSql*[T: string | Sql](
   self: Sql,
-  query: T, params: varargs[string, `$`]): Sql =
+  query: T, params: varargs[JsonNode, `%`]): Sql =
   
   if T is string:
     self.stmt.add(&"FROM {cast[string](query)}")
@@ -163,7 +203,7 @@ proc whereCond*[T: string | Sql](
   self: Sql,
   whereType: string,
   where: T,
-  params: varargs[FieldItem]): Sql =
+  params: varargs[JsonNode,`%`]): Sql =
   
   if T is string:
     self.stmt.add(&"{whereType} {cast[string](where)}")
@@ -181,42 +221,42 @@ proc whereCond*[T: string | Sql](
 proc where*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[FieldItem]): Sql =
+  params: varargs[JsonNode, `%`]): Sql =
   
   result = self.whereCond("WHERE", where, params)
 
 proc whereExists*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[FieldItem]): Sql =
+  params: varargs[JsonNode, `%`]): Sql =
   
   result = self.whereCond("WHERE EXISTS", where, params)
 
 proc andExists*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[FieldItem]): Sql =
+  params: varargs[JsonNode, `%`]): Sql =
   
   result = self.whereCond("AND EXISTS", where, params)
 
 proc orExists*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[FieldItem]): Sql =
+  params: varargs[JsonNode, `%`]): Sql =
   
   result = self.whereCond("OR EXISTS", where, params)
 
 proc andWhere*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[FieldItem]): Sql =
+  params: varargs[JsonNode, `%`]): Sql =
   
   result = self.whereCond("AND", where, params)
 
 proc orWhere*[T: string | Sql](
   self: Sql,
   where: T,
-  params: varargs[FieldItem]): Sql =
+  params: varargs[JsonNode, `%`]): Sql =
   
   result = self.whereCond("OR", where, params)
 
@@ -282,7 +322,7 @@ proc whereInCond*[T](
   params: T): Sql =
   
   if T isnot Sql:
-    let inParams = cast[seq[FieldItem]](params)
+    let inParams = cast[seq[JFieldItem]](params)
     if inParams.len != 0:
       var inStmtParams: seq[string] = @[]
       for i in 0..inParams.high:
@@ -337,7 +377,7 @@ proc betweenCond*(
   whereType: string,
   cond: string,
   field: string,
-  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
+  param: tuple[startVal: JsonNode, endVal: JsonNode]): Sql =
   
   self.stmt.add(&"""{whereType} {field} {cond} BETWEEN {param.startVal} AND {param.endVal}""")
   result = self
@@ -345,35 +385,35 @@ proc betweenCond*(
 proc whereBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
+  param: tuple[startVal: JsonNode, endVal: JsonNode]): Sql =
   
   result = self.betweenCond("WHERE", "", field, param)
 
 proc andBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
+  param: tuple[startVal: JsonNode, endVal: JsonNode]): Sql =
   
   result = self.betweenCond("AND", "", field, param)
 
 proc orBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
+  param: tuple[startVal: JsonNode, endVal: JsonNode]): Sql =
   
   result = self.betweenCond("OR", "", field, param)
 
 proc andNotBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
+  param: tuple[startVal: JsonNode, endVal: JsonNode]): Sql =
   
   result = self.betweenCond("AND", "NOT", field, param)
 
 proc orNotBetween*(
   self: Sql,
   field: string,
-  param: tuple[startVal: FieldItem, endVal: FieldItem]): Sql =
+  param: tuple[startVal: JsonNode, endVal: JsonNode]): Sql =
   
   result = self.betweenCond("OR", "NOT", field, param)
 
@@ -453,7 +493,7 @@ proc fullJoin*(
 proc having*(
   self: Sql,
   having: string,
-  params: varargs[FieldItem]): Sql =
+  params: varargs[JsonNode, `%`]): Sql =
   
   self.stmt.add(&"""HAVING {having}""")
   if params.len != 0:
@@ -472,7 +512,7 @@ proc insert*(
 
 proc values*(
   self: Sql,
-  values: varargs[seq[FieldItem]]): Sql =
+  values: varargs[seq[JsonNode]]): Sql =
 
   if self.stmt[0].contains("INSERT"):
     var insertVal: seq[string] = @[]
@@ -482,7 +522,7 @@ proc values*(
         val.add("?")
       insertVal.add(&"""({val.join(", ")})""")
       self.params &= v
-    self.stmt.add(&"""VALUES ({insertVal.join(" ,")})""")
+    self.stmt.add(&"""VALUES {insertVal.join(" ,")}""")
   else:
     raise newException(ValueError, "multi values only for INSERT")
 
@@ -490,7 +530,7 @@ proc values*(
 
 proc value*(
   self: Sql,
-  values: varargs[FieldItem]): Sql =
+  values: varargs[JsonNode, `%`]): Sql =
 
   let stmt = self.stmt[0]
   if stmt.contains("INSERT") or stmt.contains("UPDATE"):
@@ -526,22 +566,11 @@ proc bracket*(
   query: Sql): Sql =
 
   let q = query.toQs
-  self.stmt.add((&"({q.query})")
-    .replace("(WHERE", "WHERE (")
-    .replace("(AND", "AND (")
-    .replace("(LIKE", "LIKE (")
-    .replace("(ILIKE", "ILIKE (")
-    .replace("(COUNT", "COUNT (")
-    .replace("(NOT", "NOT (")
-    .replace("(NOT IN", "NOT IN (")
-    .replace("(AVG", "AVG (")
-    .replace("(SUM", "SUM (")
-    .replace("(MIN", "MIN (")
-    .replace("(MAX", "MAX (")
-    .replace("(CASE", "CASE (")
-    .replace("(HAVING", "HAVING (")
-    .replace("(ANY", "ANY (")
-    .replace("(ALL", "ALL ("))
+  var fixQuery = &"({q.query})"
+  let fixLex = fixQuery.findAll(re"\((WHERE|OR|AND|LIKE|ILIKE|COUNT|NOT|NOT IN|AVG|SUM|MIN|MAX|CASE|HAVING|ANY|ALL)+?")
+  if fixLex.len != 0:
+    fixQuery = fixQuery.replace(fixLex[0], fixLex[0].replace("(", "") & "(")
+  self.stmt.add(fixQuery)
   self.params &= q.params
   result = self
 
@@ -551,11 +580,47 @@ proc startTransaction*(self: Sql): Sql =
 
   result = self
 
+proc setTransaction*(
+  self: Sql,
+  level: SqlTransactionLevel = READ_WRITE): Sql =
+
+  var tlevel = ""
+  case level
+  of SERIALIZEABLE:
+    tlevel = "SERIALIZEABLE"
+  of REPEATABLE_READ:
+    tlevel = "REPEATABLE READ"
+  of READ_COMMITED:
+    tlevel = "READ COMMITED"
+  of READ_UNCOMMITED:
+    tlevel = "READ UNCOMMITED"
+  of READ_WRITE:
+    tlevel = "READ WRITE"
+  of READ_ONLY:
+    tlevel = "READ ONLY"
+
+  self.stmt.add("SET TRANSACTION {tlevel}")
+
+  result = self
+
+proc setTransactionReadOnly*(self: Sql): Sql =
+
+  self.stmt.add("SET TRANSACTION READ ONLY")
+
+  result = self
+
 proc savePointTransaction*(
   self: Sql,
   savePoint: string): Sql =
 
   self.stmt.add(&"SAVEPOINT {savePoint}")
+  result = self
+
+proc savePointTransactionRelease*(
+  self: Sql,
+  savePoint: string): Sql =
+
+  self.stmt.add(&"RELEASE SAVEPOINT {savePoint}")
   result = self
 
 proc commitTransaction*(self: Sql): Sql =
@@ -575,32 +640,6 @@ proc rollbackTransaction*(
 
 proc toDbType*(
   field: string,
-  value: string): JsonNode =
-  
-  let data = field.split(":")
-  result = %*{data[0]: nil}
-  if data.len == 2:
-    if value != "":
-      case data[1]
-      of "int":
-        result[data[0]] = %value.tryParseInt().val
-      of "uInt":
-        result[data[0]] = %value.tryParseUInt().val
-      of "bigInt":
-        result[data[0]] = %value.tryParseBiggestInt().val
-      of "bigUInt":
-        result[data[0]] = %value.tryParseBiggestUInt().val
-      of "float":
-        result[data[0]] = %value.tryParseFloat().val
-      of "bigFloat":
-        result[data[0]] = %value.tryParseBiggestFloat().val
-      of "bool":
-        result[data[0]] = %value.tryParseBool().val
-  elif value != "":
-    result[data[0]] = %value
-
-proc toDbType*(
-  field: string,
   nodeKind: JsonNodeKind,
   value: string): JsonNode =
 
@@ -610,7 +649,7 @@ proc toDbType*(
     of JInt:
       result[field] = %value.tryParseBiggestInt().val
     of JFloat:
-      result[field] = %value.tryParseFloat().val
+      result[field] = %value.tryParseBiggestFloat().val
     of JBool:
       result[field] = %value.tryParseBool().val
     else:

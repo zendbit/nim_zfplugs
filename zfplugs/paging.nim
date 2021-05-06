@@ -1,11 +1,11 @@
-#[
-  zfcore web framework for nim language
-  This framework if free to use and to modify
-  License: BSD
-  Author: Amru Rosyada
-  Email: amru.rosyada@gmail.com
-  Git: https://github.com/zendbit
-]#
+##
+##  zfcore web framework for nim language
+##  This framework if free to use and to modify
+##  License: BSD
+##  Author: Amru Rosyada
+##  Email: amru.rosyada@gmail.com
+##  Git: https://github.com/zendbit/nim.zfplugs
+##
 
 import uri3, json, math, strutils, strformat
 
@@ -14,7 +14,22 @@ proc genPaging*(
   url: Uri3,
   perPage: int64,
   numData: int64): JsonNode {.gcsafe.} =
-
+  ##
+  ##  generate paging:
+  ##
+  ##  simply will calculate given parameter to return paging url and number of page.
+  ##  the return win JsonNode format
+  ##  {
+  ##    "pageData": [the data of paging],
+  ##    "nextPage": [url to next page depend on ulr],
+  ##    "prevPage": [url to prvious page depend on url],
+  ##    "numPage": [total number of page],
+  ##    "numData": [total number of data],
+  ##    "lastPage": [url to last page depend on url],
+  ##    "firstPage": [url to first page depend on url],
+  ##    "perPage": [number of displayed data for each page]
+  ##  }
+  ##
   let limit = url.getQuery("perPage", "20").parseBiggestInt
   let currentPage = url.getQuery("page", "1").parseBiggestInt
   result = %*{
@@ -55,7 +70,24 @@ proc genPagingLink*(
   pagingData: JsonNode,
   pagingStep: BiggestInt = 10): JsonNode =
   ##
-  ## pagingData is result from genPaging() result
+  ##  generate paging link:
+  ##
+  ##  this will be generate number of paging link to displayed.
+  ##  pagingData parameter is result from genPaging.
+  ##  for example we have 1000 data and want to display the link only 10 navigation per page.
+  ##  the navigation link will updated if the data reach the pagingStep calculation.
+  ##
+  ##  return value in json format:
+  ##  {
+  ##    "pages": [pages data],
+  ##    "numData": [total data],
+  ##    "numPage": [total page],
+  ##    "page": [current page],
+  ##    "next": [next page url],
+  ##    "prev": [prev page url],
+  ##    "last": [last page url],
+  ##    "first": [first page url]}
+  ##  }
   ##
   var maxPageToShow = pagingStep
   let numPage = pagingData{"numPage"}.getBiggestInt
@@ -100,4 +132,4 @@ proc genPagingLink*(
       result{"pages"}.add(%*{
         "name": $i,
         "url": (url & pageUri.getQueryString)
-          .replace("page=1", &"page={i}")}) 
+          .replace("page=1", &"page={i}")})
