@@ -30,6 +30,12 @@ proc newLayout*(tpl: string): Layout =
   ##
   result = Layout(html: tpl, c: newContext())
 
+proc clear*(layout: Layout) =
+  ##
+  ##  Clear layout context parameter
+  ##
+  layout.c = newContext()
+
 proc render*(layout: Layout): string =
   ##
   ##  Render content with given context

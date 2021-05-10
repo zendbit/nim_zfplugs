@@ -10,9 +10,8 @@
 import strformat, times, macros, tables, typetraits, strutils, sequtils, json, options, re, db_mysql, db_postgres, db_sqlite
 export options, strutils, sequtils, json, strformat
 
-import stdext/[json_ext, strutils_ext, object_ext, system_ext]
-import dbs, settings, dbssql
-export dbs, dbssql, json_ext, strutils_ext, object_ext, system_ext
+import stdext/[json_ext, strutils_ext, system_ext], dbs, settings, dbssql
+export dbs, dbssql, json_ext, strutils_ext, system_ext
 
 type
   DbInfo* = tuple[
@@ -1354,3 +1353,4 @@ proc delete*[T](
   ##  let r = db.delete(Users(id: some 100))
   ##
   result = dbms.execAffectedRows(dbms.getDbType.stmtTranslator(t, DELETE, query))
+
