@@ -1122,13 +1122,13 @@ proc validatePragma[T](t: T): seq[DbmsFieldType] =
             dbmsFieldType.foreignKeyRef = v.getCustomPragmaVal(dbmsForeignKeyRef).getCustomPragmaVal(dbmsTable)
           
           when v.hasCustomPragma(dbmsForeignKeyColumnRef):
-            dbmsFieldType.foreignKeyCOlumnRef = (nameof v.getCustomPragmaVal(dbmsForeignKeyColumnRef)).replace(re"^(.+?)\.", "")
+            dbmsFieldType.foreignKeyCOlumnRef = ($>v.getCustomPragmaVal(dbmsForeignKeyColumnRef)).replace(re"^(.+?)\.", "")
           
           when v.hasCustomPragma(dbmsForeignKeyConstraint):
             let pragmaConstraint = v.getCustomPragmaVal(dbmsForeignKeyConstraint)
             dbmsFieldType.foreignKeyOnUpdate = pragmaConstraint.onUpdate
             dbmsFieldType.foreignKeyOnDelete = pragmaConstraint.onDelete
-            dbmsFieldType.foreignkeyColumnRef = pramgaConstraint.columnRef
+            dbmsFieldType.foreignkeyColumnRef = pragmaConstraint.columnRef
 
           fieldList.add(dbmsFieldType)
 
