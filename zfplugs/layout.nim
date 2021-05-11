@@ -4,7 +4,7 @@
 ##
 import moustachu
 export moustachu
-import os
+import os, strformat
 
 type
   Layout* = ref object
@@ -19,9 +19,13 @@ proc newLayoutFromFile*(name: string): Layout =
   var layoutPath = name
   if not name.fileExists:
     layoutPath = getAppDir().joinPath(name)
-  let readHtml = open(layoutPath, fmRead)
-  l.html = readHtml.readAll
-  readHtml.close
+
+  if layoutPath.fileExists:
+    let readHtml = open(layoutPath, fmRead)
+    l.html = readHtml.readAll
+    readHtml.close
+  else:
+    l.html = &"Layout file not found {name}"
   l.c = newContext()
   result = l
 
