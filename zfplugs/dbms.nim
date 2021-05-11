@@ -179,20 +179,19 @@ template dbmsForeignKeyConstraint*(
   onUpdate: string = "CASCADE",
   columnRef: string = "") {.pragma.}
 
-#var db: DBConn
-
-#
-# this will read the settings.json on the section
-# "database": {
-#   "your_connId_setting": {
-#     "username": "",
-#     "password": "",
-#     "database": "",
-#     "host": "",
-#     "port": 1234
-#   }
-# }
-#
+##  var db: DBConn
+##
+##  this will read the settings.json on the section
+##  "database": {
+##    "your_connId_setting": {
+##      "username": "",
+##      "password": "",
+##      "database": "",
+##      "host": "",
+##      "port": 1234
+##    }
+##  }
+##
 proc newDBMS*[T](connId: string): DBMS[T] {.gcsafe.} =
   ##
   ##  create new DBMS object (database connection)
@@ -1199,13 +1198,13 @@ proc stmtTranslator[T](
     else:
       discard
 
-proc newTable*[T](
+proc createTable*[T](
   dbms: Dbms,
   t: T): ExecResult  =
   ##
   ##  create new table with given object
   ##
-  ##  let ctbl = db.newTable(Users())
+  ##  let ctbl = db.createTable(Users())
   ##  if ctbl.ok:
   ##    echo "table created"
   ##  echo ctbl.msg

@@ -3,6 +3,7 @@
 ##  https://github.com/fenekku/moustachu
 ##
 import moustachu
+export moustachu
 import os
 
 type
