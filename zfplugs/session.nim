@@ -90,7 +90,11 @@ proc getSession*(
 
 proc addSession*(
   ctx: HttpContext,
-  key: string, value: JsonNode) {.gcsafe.} =
+  key: string, value: JsonNode,
+  domain: string = "",
+  path: string = "/",
+  expires: string = "",
+  secure: bool = false) {.gcsafe.} =
   ##
   ##  add session:
   ##
@@ -105,7 +109,7 @@ proc addSession*(
 
   else:
     token = createSessionToken()
-    ctx.setCookie({sessid: token}.newStringTable)
+    ctx.setCookie({sessid: token}.newStringTable, domain, path, expires, secure)
 
   if sessionData.isNil:
     discard token.createSessionFromToken()
