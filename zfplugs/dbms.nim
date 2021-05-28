@@ -494,7 +494,7 @@ proc getRow*[T](
     if not self.connected:
       result = (false, obj, "can't connect to the database.")
     else:
-      let fields = obj.fieldDescs
+      let fields = obj.fieldDesc
       let queryResults = self.conn.getRow(sql dbmsQuote(query))
       result = (true, extractQueryResults(fields, queryResults).to(T), "ok")
   except Exception as ex:
@@ -548,7 +548,7 @@ proc getRows*[T](
     if not self.connected:
       result = (false, @[], "can't connect to the database.")
     else:
-      let fields = obj.fieldDescs
+      let fields = obj.fieldDesc
       let queryResults = self.conn.getAllRows(sql dbmsQuote(query))
       var res: seq[T] = @[]
       if queryResults.len > 0 and queryResults[0][0] != "":
