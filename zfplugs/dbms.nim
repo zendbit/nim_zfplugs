@@ -1045,10 +1045,6 @@ proc generateJoinTable(
       fieldName = f.field.name
     fields.add(&"{f.tableName}.{fieldName}")
 
-    echo "---"
-    echo f.foreignKeyColumnRef
-    echo f.foreignKeyRef
-    echo "---"
     if f.foreignKeyColumnRef != "" and
       f.foreignKeyRef in tableName:
       joinPair.add(&"{f.tableName}.{fieldName}={f.foreignKeyRef}.{f.foreignKeyColumnRef}")
