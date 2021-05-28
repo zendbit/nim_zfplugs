@@ -161,7 +161,7 @@ type
 ##
 ##
 
-template dbmsTable*(name: string) {.pragma.}
+template dbmsTable*(name: string = "") {.pragma.}
 template dbmsField*(
   name: string = "",
   isPrimaryKey: bool = false,
@@ -1081,7 +1081,9 @@ proc validatePragma[T](t: T): seq[DbmsFieldType] =
   ##
   when t.hasCustomPragma(dbmsTable):
     var fieldList: seq[DbmsFieldType] = @[]
-    let dbmsTablePragma = t.getCustomPragmaVal(dbmsTable)
+    var dbmsTablePragma = t.getCustomPragmaVal(dbmsTable)
+    if dbmsTablePragma == "":
+      dbmsTablePragma = ($typeof(t)).split(":")[0]
     if dbmsTablePragma.strip != "":
       for k, v in system.fieldPairs(t):
         when v.hasCustomPragma(dbmsField):
