@@ -1045,9 +1045,13 @@ proc generateJoinTable(
       fieldName = f.field.name
     fields.add(&"{f.tableName}.{fieldName}")
 
+    echo "---"
+    echo f.foreignKeyColumnRef
+    echo f.foreignKeyRef
+    echo "---"
     if f.foreignKeyColumnRef != "" and
       f.foreignKeyRef in tableName:
-      joinPair.add(&"{f.tableName}.{fieldName}={f.foreignKeyColumnRef}.{f.foreignKeyColumnRef}")
+      joinPair.add(&"{f.tableName}.{fieldName}={f.foreignKeyRef}.{f.foreignKeyColumnRef}")
 
   # get second tablename
   for f in fieldListTbl2:
@@ -1121,9 +1125,11 @@ proc validatePragma[T](t: T): seq[DbmsFieldType] =
 
           when v.hasCustomPragma(dbmsForeignKeyRef):
             dbmsFieldType.foreignKeyRef = v.getCustomPragmaVal(dbmsForeignKeyRef).getCustomPragmaVal(dbmsTable)
+            if dbmsFieldType.foreignKeyRef == "":
+              dbmsFieldType.foreignKeyRef = ($(typeof v.getCustomPragmaVal(dbmsForeignKeyRef))).split(":")[0]
           
           when v.hasCustomPragma(dbmsForeignKeyColumnRef):
-            dbmsFieldType.foreignKeyCOlumnRef = ($>v.getCustomPragmaVal(dbmsForeignKeyColumnRef)).replace(re"^(.+?)\.", "")
+            dbmsFieldType.foreignKeyColumnRef = ($>v.getCustomPragmaVal(dbmsForeignKeyColumnRef)).replace(re"^(.+?)\.", "")
           
           when v.hasCustomPragma(dbmsForeignKeyConstraint):
             let pragmaConstraint = v.getCustomPragmaVal(dbmsForeignKeyConstraint)
