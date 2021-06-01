@@ -67,7 +67,13 @@ proc extractFields(
   fields: openArray[string]): seq[string] =
 
   result = fields.map(proc (x: string): string =
-    let field = x.toLower.split(" as ")
+    var field: seq[string] = @[]
+    if x.contains(" AS "):
+      field = x.split(" AS ")
+    elif x.contains(" as "):
+      field = x.split(" as ")
+    else:
+      field.add(x)
     result = field[field.high])
 
 proc dropDatabase*(

@@ -25,7 +25,7 @@ type
     dbInfo*: DbInfo
     conn*: T
     connected*: bool
-    lastSql*: Sql
+    dbmsStack*: Table[DbmsStmtType, DbmsFieldType]
 
   KVObj* = tuple[
     keys: seq[string],
@@ -85,10 +85,9 @@ type
     DBMYSQL
     DBSQLITE
 
-  DbmsModel* = ref object of RootObj
-
   DbmsStmtType* = enum
     SELECT
+    MULTI_SELECT
     INSERT
     DELETE
     UPDATE
@@ -161,6 +160,13 @@ type
 ##
 ##
 
+proc dbmsJsonFieldDesc(dbmsFieldTypes: JsonNode): seq[JFieldDesc] =
+  for field in dbmsFieldTypes.to(seq[DbmsFieldType]):
+    var name = field.name
+    if name == "":
+      name = field.field.name
+    result.add((&"{field.tableName}.{name}", field.field.nodeKind))
+
 template dbmsTable*(name: string = "") {.pragma.}
 template dbmsField*(
   name: string = "",
@@ -204,7 +210,9 @@ proc newDBMS*[T](connId: string): DBMS[T] {.gcsafe.} =
     if not db.isNil:
       let dbConf = db{connId}
       if not dbConf.isNil:
-        result = DBMS[T](connId: connId)
+        result = DBMS[T](
+          connId: connId,
+          dbmsStack: initTable[DbmsStmtType, DbmsFieldType]())
         result.dbInfo = (
           dbConf{"database"}.getStr(),
           dbConf{"username"}.getStr(),
@@ -250,7 +258,9 @@ proc newDBMS*[T](
     host,
     port).tryConnect()
 
-  result = DBMS[T](connId: "")
+  result = DBMS[T](
+    connId: "",
+    dbmsStack: initTable[DbmsStmtType, DbmsFieldType]())
   result.connected = c.success
   if c.success:
     result.conn = c.conn
@@ -494,7 +504,11 @@ proc getRow*[T](
     if not self.connected:
       result = (false, obj, "can't connect to the database.")
     else:
-      let fields = obj.fieldDesc
+      var fields: seq[JFieldDesc]
+      when obj is JsonNode:
+        fields = obj.dbmsJsonFieldDesc
+      else:
+        fields = obj.fieldDesc
       let queryResults = self.conn.getRow(sql dbmsQuote(query))
       result = (true, extractQueryResults(fields, queryResults).to(T), "ok")
   except Exception as ex:
@@ -520,7 +534,11 @@ proc getRow*[T](
     if not self.connected:
       result = (false, obj, "can't connect to the database.")
     else:
-      let fields = obj.fieldsDesc
+      var fields: seq[JFieldDesc]
+      when obj is JsonNode:
+        fields = obj.dbmsJsonFieldDesc
+      else:
+        fields = obj.fieldDesc
       q = (Sql()
         .select(fields.map(proc(x: JFieldDesc): string = x.name))
         .fromTable(table) & query)
@@ -548,7 +566,11 @@ proc getRows*[T](
     if not self.connected:
       result = (false, @[], "can't connect to the database.")
     else:
-      let fields = obj.fieldDesc
+      var fields: seq[JFieldDesc]
+      when obj is JsonNode:
+        fields = obj.dbmsJsonFieldDesc
+      else:
+        fields = obj.fieldDesc
       let queryResults = self.conn.getAllRows(sql dbmsQuote(query))
       var res: seq[T] = @[]
       if queryResults.len > 0 and queryResults[0][0] != "":
@@ -735,7 +757,7 @@ proc toWhereQuery*[T](
   ##
   result = (%obj).toWhereQuery(tablePrefix, op)
 
-proc getDbType(dbms: Dbms): DbmsType =
+proc getDbType(dbms: DBMS): DbmsType =
   ##
   ##  get database type
   ##
@@ -865,7 +887,8 @@ proc generateCreateTable(
 
 proc generateSelectTable(
   fieldList: seq[DbmsFieldType],
-  query: Sql = Sql()): Sql =
+  query: Sql = Sql(),
+  withTablePrefix: bool = false): Sql =
   ##
   ##  select table syntax generator
   ##
@@ -881,15 +904,17 @@ proc generateSelectTable(
     var fieldName = f.name
     if f.field.name != "":
       fieldName = f.field.name
+    if withTablePrefix:
+      fieldName = &"{f.tableName}.{fieldName}"
     fields.add(fieldName)
     
     if f.field.val != "null":
       if where.stmt.len == 0:
-        discard where.where(&"{tableName}.{fieldName}=?", %f.field.val)
+        discard where.where(&"{f.tableName}.{fieldName}=?", %f.field.val)
       else:
-        discard where.andWhere(&"{tableName}.{fieldName}=?", %f.field.val)
+        discard where.andWhere(&"{f.tableName}.{fieldName}=?", %f.field.val)
 
-  result = q.select(fields).fromTable(tableName) & where & query
+  result = q.select(fields, not withTablePrefix).fromTable(tableName) & where & query
 
 proc generateCountTable(
   fieldList: seq[DbmsFieldType],
@@ -1172,23 +1197,28 @@ proc stmtTranslator[T](
   ##  sql sstatement translator
   ##
   var multiFieldList: seq[seq[DbmsFieldType]] = @[]
-  when t is seq or t is array:
-    # for multiple fieldlist, like insert, update, join
-    for i in t:
-      when i is object:
-        multiFieldList.add(i.validatePragma)
-      elif i is ref object:
-        multiFieldList.add(i[].validatePragma)
+  when t is JsonNode:
+    multiFieldList.add(t.to(seq[DbmsFieldType]))
   else:
-    when t is object:
-      multiFieldList.add(t.validatePragma)
-    elif t is ref object:
-      multiFieldList.add(t[].validatePragma)
+    when t is seq or t is array:
+      # for multiple fieldlist, like insert, update, join
+      for i in t:
+        when i is object:
+          multiFieldList.add(i.validatePragma)
+        elif i is ref object:
+          multiFieldList.add(i[].validatePragma)
+    else:
+      when t is object:
+        multiFieldList.add(t.validatePragma)
+      elif t is ref object:
+        multiFieldList.add(t[].validatePragma)
 
   if multiFieldList.len != 0:
     case stmtType
     of SELECT:
       result = generateSelectTable(multiFieldList[0], query)
+    of MULTI_SELECT:
+      result = generateSelectTable(multiFieldList[0], query, true)
     of INSERT:
       result = generateInsertTable(multiFieldList)
     of UPDATE:
@@ -1203,7 +1233,7 @@ proc stmtTranslator[T](
       discard
 
 proc createTable*[T](
-  dbms: Dbms,
+  dbms: DBMS,
   t: T): ExecResult  =
   ##
   ##  create new table with given object
@@ -1216,7 +1246,7 @@ proc createTable*[T](
   result = dbms.exec(dbms.getDbType.stmtTranslator(t, CREATE_TABLE))
 
 proc select*[T](
-  dbms: Dbms,
+  dbms: DBMS,
   t: T,
   query: Sql = Sql()): RowResults[T] =
   ##
@@ -1232,8 +1262,37 @@ proc select*[T](
   
   result = dbms.getRows(t, dbms.getDbType.stmtTranslator(t, SELECT, query))
 
+proc select*(
+  dbms: DBMS,
+  dbmsFieldTypes: seq[seq[DbmsFieldType]],
+  fields: seq[string],
+  query: Sql = Sql()): RowResults[JsonNode] =
+  ##
+  ##  select multi row result from table with given objects,
+  ##  the selectJoin is for join table
+  ##
+  ##  let r = dbConn(Sinacc)
+  ##    .selectJoin(
+  ##      [%@NetworkNas(), %@StatusType(), %@StateType()],
+  ##      NetworkNas().innerJoin(StatusType())&
+  ##      NetworkNas().innerJoin(StateType())&
+  ##      NetworkNas().innerJoin(NetworkNasType()))
+  ##  if r.ok:
+  ##    echo r.rows
+  ##  echo r.msg
+  ##
+
+  let dbmsField = dbmsFieldTypes
+    .concat
+    .filter(proc (x: DbmsFieldType): bool =
+      var name = x.name
+      if name == "":
+        name = x.field.name
+      result = &"{x.tableName}.{name}" in fields)
+  result = dbms.getRows(%dbmsField, dbms.getDbType.stmtTranslator(%dbmsField, MULTI_SELECT, query, fields))
+
 proc selectOne*[T](
-  dbms: Dbms,
+  dbms: DBMS,
   t: T,
   query: Sql = Sql()): RowResult[T] =
   ##
@@ -1245,6 +1304,35 @@ proc selectOne*[T](
   ##  echo r.msg
   ##
   result = dbms.getRow(t, dbms.getDbType.stmtTranslator(t, SELECT, query))
+
+proc selectOne*(
+  dbms: DBMS,
+  dbmsFieldTypes: seq[seq[DbmsFieldType]],
+  fields: seq[string] = @[],
+  query: Sql = Sql()): RowResult[JsonNode] =
+  ##
+  ##  select single row result from table with given objects,
+  ##  the selectJoin is for join table
+  ##
+  ##  let r = dbConn(Sinacc)
+  ##    .selectOneJoin(
+  ##      [%@NetworkNas(), %@StatusType(), %@StateType()],
+  ##      NetworkNas().innerJoin(StatusType())&
+  ##      NetworkNas().innerJoin(StateType())&
+  ##      NetworkNas().innerJoin(NetworkNasType()))
+  ##  if r.ok:
+  ##    echo r.row
+  ##  echo r.msg
+  ##
+
+  let dbmsField = dbmsFieldTypes
+    .concat
+    .filter(proc (x: DbmsFieldType): bool =
+      var name = x.name
+      if name == "":
+        name = x.field.name
+      result = &"{x.tableName}.{name}" in fields)
+  result = dbms.getRow(%dbmsField, dbms.getDbType.stmtTranslator(%dbmsField, MULTI_SELECT, query))
 
 proc innerJoin*[T1, T2](
   tbl1: T1,
@@ -1283,7 +1371,7 @@ proc rightJoin*[T1, T2](
   result = stmtTranslator(tbl1, tbl2, RIGHTJOIN)
 
 proc count*[T](
-  dbms: Dbms,
+  dbms: DBMS,
   t: T,
   query: Sql = Sql()): CountResult =
   ##
@@ -1297,7 +1385,7 @@ proc count*[T](
   result =  dbms.getCount(dbms.getDbType.stmtTranslator(t, COUNT, query))
 
 proc insert*[T](
-  dbms: Dbms,
+  dbms: DBMS,
   t: T): AffectedRowResults =
   ##
   ##  insert to table with given object or list of object
@@ -1310,7 +1398,7 @@ proc insert*[T](
   result = dbms.execAffectedRows(dbms.getDbType.stmtTranslator(t, INSERT))
 
 proc update*[T](
-  dbms: Dbms,
+  dbms: DBMS,
   t: T,
   query: Sql = Sql()): AffectedRowResults =
   ##
@@ -1347,7 +1435,7 @@ proc update*[T](
   result = (ok, affectedRows, msg)
 
 proc delete*[T](
-  dbms: Dbms,
+  dbms: DBMS,
   t: T,
   query: Sql = Sql()): AffectedRowResults =
   ##
@@ -1357,3 +1445,8 @@ proc delete*[T](
   ##
   result = dbms.execAffectedRows(dbms.getDbType.stmtTranslator(t, DELETE, query))
 
+proc `%@`*[T: object|ref object](t: T): seq[DbmsFieldType] =
+  when t is object:
+    result = t.validatePragma()
+  else:
+    result = t[].validatePragma()
