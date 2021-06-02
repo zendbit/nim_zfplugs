@@ -425,14 +425,14 @@ proc orNotBetween*(
 
 proc limit*(
   self: Sql,
-  limit: int64): Sql =
+  limit: uint64): Sql =
 
   self.stmt.add(&"LIMIT {limit}")
   result = self
 
 proc offset*(
   self: Sql,
-  offset: int64): Sql =
+  offset: uint64): Sql =
 
   self.stmt.add(&"OFFSET {offset}")
   result = self

@@ -12,8 +12,8 @@ import uri3, json, math, strutils, strformat
 proc genPaging*(
   data: JsonNode,
   url: Uri3,
-  perPage: int64,
-  numData: int64): JsonNode {.gcsafe.} =
+  perPage: uint64,
+  numData: uint64): JsonNode {.gcsafe.} =
   ##
   ##  generate paging:
   ##
@@ -30,8 +30,8 @@ proc genPaging*(
   ##    "perPage": [number of displayed data for each page]
   ##  }
   ##
-  let limit = url.getQuery("perPage", "20").parseBiggestInt
-  let currentPage = url.getQuery("page", "1").parseBiggestInt
+  let limit = url.getQuery("perPage", "20").parseBiggestUInt
+  let currentPage = url.getQuery("page", "1").parseBiggestUInt
   result = %*{
     "pageData": data,
     "nextPage": "",
@@ -48,7 +48,7 @@ proc genPaging*(
       result["page"] = %currentPage
 
     if numData > limit:
-      let numPage = (numData.float64 / limit.float64).ceil().int64
+      let numPage = (numData.float64 / limit.float64).ceil().uint64
       result["numData"] = %numData
       result["numPage"] = %numPage
       if currentPage < numPage:

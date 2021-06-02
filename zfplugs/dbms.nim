@@ -53,7 +53,7 @@ type
   
   CountResult* = tuple[
     ok: bool,
-    count: uint64,
+    val: uint64,
     msg: string]
 
   RowResults*[T] = tuple[
@@ -462,7 +462,7 @@ proc extractQueryResults*(fields: seq[JFieldDesc], queryResults: seq[string]): J
     for i in 0..fields.high:
       for k, v in fields[i].name.toDbType(fields[i].nodeKind, queryResults[i]):
         var fprops = k.split(" AS ")
-        result[fprops[fprops.high].strip] = v
+        result[fprops[fprops.high].strip.replace(".", "_")] = v
 
 proc getCount*(
   self: DBMS,
@@ -478,7 +478,7 @@ proc getCount*(
   ##
   try:
     if not self.connected:
-      result = (false, 0'i64, "can't connect to the database.")
+      result = (false, 0.uint64, "can't connect to the database.")
     else:
       let queryResults = self.conn.getRow(sql dbmsQuote(query))
       let countResult = tryParseBiggestUInt(queryResults[0])
@@ -486,7 +486,7 @@ proc getCount*(
   except Exception as ex:
     echo &"{ex.msg}, {query.toQs}"
     echo dbmsQuote(query)
-    result = (false, 0'i64, ex.msg)
+    result = (false, 0.uint64, ex.msg)
 
 proc getRow*[T](
   self: DBMS,
