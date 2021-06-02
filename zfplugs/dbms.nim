@@ -1282,14 +1282,14 @@ proc select*(
   ##  echo r.msg
   ##
 
-  let dbmsField = dbmsFieldTypes
-    .concat
-    .filter(proc (x: DbmsFieldType): bool =
+  var dbmsField = dbmsFieldTypes.concat
+  if fields.len > 0:
+    dbmsField = dbmsField.filter(proc (x: DbmsFieldType): bool =
       var name = x.name
       if name == "":
         name = x.field.name
       result = &"{x.tableName}.{name}" in fields)
-  result = dbms.getRows(%dbmsField, dbms.getDbType.stmtTranslator(%dbmsField, MULTI_SELECT, query, fields))
+  result = dbms.getRows(%dbmsField, dbms.getDbType.stmtTranslator(%dbmsField, MULTI_SELECT, query))
 
 proc selectOne*[T](
   dbms: DBMS,
@@ -1325,9 +1325,9 @@ proc selectOne*(
   ##  echo r.msg
   ##
 
-  let dbmsField = dbmsFieldTypes
-    .concat
-    .filter(proc (x: DbmsFieldType): bool =
+  var dbmsField = dbmsFieldTypes.concat
+  if fields.len > 0:
+    dbmsField = dbmsField.filter(proc (x: DbmsFieldType): bool =
       var name = x.name
       if name == "":
         name = x.field.name
