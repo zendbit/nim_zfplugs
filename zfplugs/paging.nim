@@ -68,7 +68,7 @@ proc genPaging*(
 proc genPagingLink*(
   url: string,
   pagingData: JsonNode,
-  pagingStep: BiggestInt = 10): JsonNode =
+  pagingStep: uint64 = 10): JsonNode =
   ##
   ##  generate paging link:
   ##
@@ -90,11 +90,11 @@ proc genPagingLink*(
   ##  }
   ##
   var maxPageToShow = pagingStep
-  let numPage = pagingData{"numPage"}.getBiggestInt
-  let page = pagingData{"page"}.getBiggestInt
+  let numPage = ($pagingData{"numPage"}).parseBiggestUInt
+  let page = ($pagingData{"page"}).parseBiggestUInt
   result = %*{
     "pages": [],
-    "numData": pagingData{"numData"}.getBiggestInt,
+    "numData": ($pagingData{"numData"}).parseBiggestUInt,
     "numPage": numPage,
     "page": page,
     "next": "",
