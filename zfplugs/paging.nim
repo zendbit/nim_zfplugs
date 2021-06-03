@@ -30,7 +30,7 @@ proc genPaging*(
   ##    "perPage": [number of displayed data for each page]
   ##  }
   ##
-  let limit = url.getQuery("perPage", "20").parseBiggestUInt
+  
   let currentPage = url.getQuery("page", "1").parseBiggestUInt
   result = %*{
     "pageData": data,
@@ -47,8 +47,8 @@ proc genPaging*(
     if currentPage > 0:
       result["page"] = %currentPage
 
-    if numData > limit:
-      let numPage = (numData.float64 / limit.float64).ceil().uint64
+    if numData > perPage:
+      let numPage = (numData.float64 / perPage.float64).ceil().uint64
       result["numData"] = %numData
       result["numPage"] = %numPage
       if currentPage < numPage:
