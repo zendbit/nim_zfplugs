@@ -98,21 +98,21 @@ type
     COUNT
 
   DbmsFieldType* = ref object
-    field: JFieldPair
-    isPrimaryKey: bool
-    isNull: bool
-    foreignKeyRef: string
-    name: string
-    isUnique: bool
-    length: uint64
-    dataType: DbmsDataType
-    foreignKeyOnUpdate: string
-    foreignKeyOnDelete: string
-    foreignKeyColumnRef: string
-    tableName: string
-    timeFormat: string
-    dateFormat: string
-    timestampFormat: string
+    field*: JFieldPair
+    isPrimaryKey*: bool
+    isNull*: bool
+    foreignKeyRef*: string
+    name*: string
+    isUnique*: bool
+    length*: uint64
+    dataType*: DbmsDataType
+    foreignKeyOnUpdate*: string
+    foreignKeyOnDelete*: string
+    foreignKeyColumnRef*: string
+    tableName*: string
+    timeFormat*: string
+    dateFormat*: string
+    timestampFormat*: string
 
 ##
 ##  dbmsTable pragma this is for type definition
