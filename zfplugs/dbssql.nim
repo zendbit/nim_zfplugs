@@ -320,7 +320,7 @@ proc unionAll*(
 
   result = self.unionCond("All", unionWith)
 
-proc whereInCond*[T](
+proc whereInCond*[T: seq[JsonNode]|openArray[JsonNode]|varargs[JsonNode,`%`]|Sql](
   self: Sql,
   whereType: string,
   cond: string,
@@ -328,13 +328,12 @@ proc whereInCond*[T](
   params: T): Sql =
   
   if T isnot Sql:
-    let inParams = cast[seq[JFieldItem]](params)
-    if inParams.len != 0:
+    if params.len != 0:
       var inStmtParams: seq[string] = @[]
-      for i in 0..inParams.high:
+      for i in 0..params.high:
         inStmtParams.add("?")
       self.stmt.add(&"""{whereType} {field} {cond} IN ({inStmtParams.join(", ")})""")
-      self.params &= inParams
+      self.params &= params
   else:
     let q = cast[Sql](params).toQs
     self.stmt.add(&"{whereType} {field} {cond} IN ({q.query})")
