@@ -1418,12 +1418,12 @@ proc update*[T](
   if startTransaction.ok:
     when t is array or t is seq:
       for it in t:
-        let selectIt = dbms.select(it)
+        let selectIt = dbms.selectOne(it)
         if selectIt.ok:
           if dbms.execAffectedRows(dbms.getDbType.stmtTranslator(selectIt.row.patch(it), UPDATE, query)).ok:
             affectedRows += 1
     else:
-      let selectT = dbms.select(t)
+      let selectT = dbms.selectOne(t)
       if selectT.ok:
         if dbms.execAffectedRows(dbms.getDbType.stmtTranslator(selectT.row.patch(t), UPDATE, query)).ok:
           affectedRows = 1
