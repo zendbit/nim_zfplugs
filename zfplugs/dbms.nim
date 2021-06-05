@@ -456,13 +456,13 @@ proc exec*(
     echo dbmsQuote(q)
     result = (false, ex.msg)
     
-proc extractQueryResults*(fields: seq[JFieldDesc], queryResults: seq[string]): JsonNode {.gcsafe.} =
+proc extractQueryResults*(fields: seq[JFieldDesc], queryResults: seq[string], fieldDelimiter: string = "_"): JsonNode {.gcsafe.} =
   result = %*{}
   if queryResults.len > 0 and queryResults[0] != "" and queryResults.len == fields.len:
     for i in 0..fields.high:
       for k, v in fields[i].name.toDbType(fields[i].nodeKind, queryResults[i]):
         var fprops = k.split(" AS ")
-        result[fprops[fprops.high].strip.replace(".", "_")] = v
+        result[fprops[fprops.high].strip.replace(".", fieldDelimiter)] = v
 
 proc getCount*(
   self: DBMS,
@@ -491,7 +491,8 @@ proc getCount*(
 proc getRow*[T](
   self: DBMS,
   obj: T,
-  query: Sql): RowResult[T] {.gcsafe.} =
+  query: Sql,
+  fieldDelimiter: string = "_"): RowResult[T] {.gcsafe.} =
   ##
   ##  get row from database will return RowResult
   ##
@@ -510,7 +511,7 @@ proc getRow*[T](
       else:
         fields = obj.fieldDesc
       let queryResults = self.conn.getRow(sql dbmsQuote(query))
-      result = (true, extractQueryResults(fields, queryResults).to(T), "ok")
+      result = (true, extractQueryResults(fields, queryResults, fieldDelimiter).to(T), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {query.toQs}"
     echo dbmsQuote(query)
@@ -520,7 +521,8 @@ proc getRow*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): RowResult[T] {.gcsafe.} =
+  query: Sql,
+  fieldDelimiter: string = "_"): RowResult[T] {.gcsafe.} =
   ##
   ##  get row result from database and return RowResult
   ##
@@ -544,7 +546,7 @@ proc getRow*[T](
         .fromTable(table) & query)
        
       let queryResults = self.conn.getRow(sql dbmsQuote(q))
-      result = (true, extractQueryResults(fields, queryResults).to(T), "ok")
+      result = (true, extractQueryResults(fields, queryResults, fieldDelimiter).to(T), "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
     echo dbmsQuote(q)
@@ -553,7 +555,8 @@ proc getRow*[T](
 proc getRows*[T](
   self: DBMS,
   obj: T,
-  query: Sql): RowResults[T] {.gcsafe.} =
+  query: Sql,
+  fieldDelimiter: string = "_"): RowResults[T] {.gcsafe.} =
   ##
   ##  get multiple rows from database will return RowResults
   ##
@@ -575,7 +578,7 @@ proc getRows*[T](
       var res: seq[T] = @[]
       if queryResults.len > 0 and queryResults[0][0] != "":
         for qres in queryResults:
-          res.add(extractQueryResults(fields, qres).to(T))
+          res.add(extractQueryResults(fields, qres, fieldDelimiter).to(T))
       result = (true, res, "ok")
   except Exception as ex:
     echo &"{ex.msg}, {query.toQs}"
@@ -586,7 +589,8 @@ proc getRows*[T](
   self: DBMS,
   table: string,
   obj: T,
-  query: Sql): RowResults[T] {.gcsafe.} =
+  query: Sql,
+  fieldDelimiter: string = "_"): RowResults[T] {.gcsafe.} =
   ##
   ##  get multiple rows from database will return RowResults
   ##
@@ -609,7 +613,7 @@ proc getRows*[T](
       var res: seq[T] = @[]
       if queryResults.len > 0 and queryResults[0][0] != "":
         for qres in queryResults:
-          res.add(extractQueryResults(fields, qres).to(T))
+          res.add(extractQueryResults(fields, qres, fieldDelimiter).to(T))
       result = (true, res, "ok")
   except Exception as ex:
     echo &"{ex.msg}, {q.toQs}"
@@ -1266,7 +1270,8 @@ proc select*(
   dbms: DBMS,
   dbmsFieldTypes: seq[seq[DbmsFieldType]],
   fields: seq[string],
-  query: Sql = Sql()): RowResults[JsonNode] =
+  query: Sql = Sql(),
+  fieldDelimiter: string = "_"): RowResults[JsonNode] =
   ##
   ##  select multi row result from table with given objects,
   ##  the selectJoin is for join table
@@ -1289,7 +1294,7 @@ proc select*(
       if name == "":
         name = x.field.name
       result = &"{x.tableName}.{name}" in fields)
-  result = dbms.getRows(%dbmsField, dbms.getDbType.stmtTranslator(%dbmsField, MULTI_SELECT, query))
+  result = dbms.getRows(%dbmsField, dbms.getDbType.stmtTranslator(%dbmsField, MULTI_SELECT, query), fieldDelimiter)
 
 proc selectOne*[T](
   dbms: DBMS,
@@ -1309,7 +1314,8 @@ proc selectOne*(
   dbms: DBMS,
   dbmsFieldTypes: seq[seq[DbmsFieldType]],
   fields: seq[string] = @[],
-  query: Sql = Sql()): RowResult[JsonNode] =
+  query: Sql = Sql(),
+  fieldDelimiter: string = "_"): RowResult[JsonNode] =
   ##
   ##  select single row result from table with given objects,
   ##  the selectJoin is for join table
@@ -1332,7 +1338,7 @@ proc selectOne*(
       if name == "":
         name = x.field.name
       result = &"{x.tableName}.{name}" in fields)
-  result = dbms.getRow(%dbmsField, dbms.getDbType.stmtTranslator(%dbmsField, MULTI_SELECT, query))
+  result = dbms.getRow(%dbmsField, dbms.getDbType.stmtTranslator(%dbmsField, MULTI_SELECT, query), fieldDelimiter)
 
 proc innerJoin*[T1, T2](
   tbl1: T1,
