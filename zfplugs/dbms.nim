@@ -955,7 +955,7 @@ proc generateInsertTable(
   # prepare of multiple insert
   # if single insert then get the first index
   #var multiValues: seq[seq[JFieldItem]] = @[]
-  var multiValues: seq[JsonNode] = @[]
+  var multiValues: seq[seq[JsonNode]] = @[]
   var fields: seq[string] = @[]
   var tableName = ""
   var isExtractFieldComplete = false
@@ -982,7 +982,7 @@ proc generateInsertTable(
     isExtractFieldComplete = true
     multiValues.add(values)
 
-  if multiValues.len == 0:
+  if multiValues.len == 1:
     result = q.insert(tableName, fields).value(multiValues[0])
   else:
     result = q.insert(tableName, fields).values(multiValues)
