@@ -312,7 +312,7 @@ proc extractKeyValue*[T](
   var values: seq[string] = @[]
   var nodesKind: seq[JsonNodeKind] = @[]
   let obj = %obj
-  for k, v in obj.discardNull:
+  for k, v in obj:
     if k.toLower.contains("-as-"): continue
     
     var skip = false
@@ -346,8 +346,12 @@ proc dbmsQuote*(q: Sql): string =
     #  else:
     #    #p.val
     #    "null"
-    var v = if p.kind == JString:
-        &"'{dbmsQuote(p.getStr)}'"
+    var v =
+      if p.kind == JString:
+        if p.getStr != "null":
+          &"'{dbmsQuote(p.getStr)}'"
+        else:
+          &"{dbmsQuote(p.getStr)}"
       elif p.kind == JNull:
         "null"
       else:
@@ -914,9 +918,9 @@ proc generateSelectTable(
     
     if f.field.val != "null":
       if where.stmt.len == 0:
-        discard where.where(&"{f.tableName}.{fieldName}=?", %f.field.val)
+        discard where.where(&"{f.tableName}.{fieldName}=?", f.field.jValue)
       else:
-        discard where.andWhere(&"{f.tableName}.{fieldName}=?", %f.field.val)
+        discard where.andWhere(&"{f.tableName}.{fieldName}=?", f.field.jValue)
 
   result = q.select(fields, not withTablePrefix).fromTable(tableName) & where & query
 
@@ -940,9 +944,9 @@ proc generateCountTable(
     
     if f.field.val != "null":
       if where.stmt.len == 0:
-        discard where.where(&"{tableName}.{fieldName}=?", %f.field.val)
+        discard where.where(&"{tableName}.{fieldName}=?", f.field.jValue)
       else:
-        discard where.andWhere(&"{tableName}.{fieldName}=?", %f.field.val)
+        discard where.andWhere(&"{tableName}.{fieldName}=?", f.field.jValue)
 
   result = q.select("COUNT(*)", withTablePrefix = false).fromTable(tableName) & where & query
 
@@ -977,7 +981,7 @@ proc generateInsertTable(
         if not isExtractFieldComplete:
           fields.add(fieldName)
 
-        values.add(%f.field.val)
+        values.add(f.field.jValue)
 
     isExtractFieldComplete = true
     multiValues.add(values)
@@ -1009,13 +1013,13 @@ proc generateUpdateTable(
       fieldName = f.field.name
     fields.add(fieldName)
         
-    value.add(%f.field.val)
+    value.add(f.field.jValue)
     
     if f.isPrimaryKey:
       if where.stmt.len == 0:
-        discard where.where(&"{tableName}.{fieldName}=?", %f.field.val)
+        discard where.where(&"{tableName}.{fieldName}=?", f.field.jValue)
       else:
-        discard where.andWhere(&"{tableName}.{fieldName}=?", %f.field.val)
+        discard where.andWhere(&"{tableName}.{fieldName}=?", f.field.jValue)
 
   result = q.update(tableName, fields).value(value) & where & query
 
@@ -1041,9 +1045,9 @@ proc generateDeleteTable(
 
       if f.field.val != "null":
         if fieldFilter.stmt.len == 0:
-          discard fieldFilter.append(&"{tableName}.{fieldName}=?", %f.field.val)
+          discard fieldFilter.append(&"{tableName}.{fieldName}=?", f.field.jValue)
         else:
-          discard fieldFilter.append(&"AND {tableName}.{fieldName}=?", %f.field.val)
+          discard fieldFilter.append(&"AND {tableName}.{fieldName}=?", f.field.jValue)
 
     if where.stmt.len == 0:
       discard where.bracket(fieldFilter)
