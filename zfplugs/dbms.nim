@@ -1051,6 +1051,7 @@ proc generateDeleteTable(
       discard where.append("OR").bracket(fieldFilter)
 
   result = q.delete(tableName).where(where) & query
+  result.stmt = @[result.stmt.join(" ").replace("WHERE (())", " ")]
 
 proc generateJoinTable(
   fieldListTbl1: seq[DbmsFieldType],
@@ -1424,16 +1425,12 @@ proc update*[T](
   if startTransaction.ok:
     when t is array or t is seq:
       for it in t:
-        let selectIt = dbms.selectOne(it)
-        if selectIt.ok:
-          if dbms.execAffectedRows(dbms.getDbType.stmtTranslator(selectIt.row.patch(it), UPDATE, query)).ok:
-            affectedRows += 1
+        if dbms.execAffectedRows(dbms.getDbType.stmtTranslator(it, UPDATE, query)).ok:
+          affectedRows += 1
     else:
-      let selectT = dbms.selectOne(t)
-      if selectT.ok:
-        if dbms.execAffectedRows(dbms.getDbType.stmtTranslator(selectT.row.patch(t), UPDATE, query)).ok:
-          affectedRows = 1
-          msg = "ok"
+      if dbms.execAffectedRows(dbms.getDbType.stmtTranslator(t, UPDATE, query)).ok:
+        affectedRows = 1
+        msg = "ok"
 
   let commitTransaction = dbms.exec(Sql().commitTransaction)
   ok = commitTransaction.ok

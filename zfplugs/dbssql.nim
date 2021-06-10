@@ -192,7 +192,7 @@ proc fromSql*[T: string | Sql](
   self: Sql,
   query: T, params: varargs[JsonNode, `%`]): Sql =
   
-  if T is string:
+  when T is string:
     self.stmt.add(&"FROM {cast[string](query)}")
   else:
     let q = cast[Sql](query).toQs
@@ -211,7 +211,7 @@ proc whereCond*[T: string | Sql](
   where: T,
   params: varargs[JsonNode,`%`]): Sql =
   
-  if T is string:
+  when T is string:
     self.stmt.add(&"{whereType} {cast[string](where)}")
   else:
     let q = cast[Sql](where).toQs
@@ -327,7 +327,7 @@ proc whereInCond*[T: seq[JsonNode]|openArray[JsonNode]|varargs[JsonNode,`%`]|Sql
   field: string,
   params: T): Sql =
   
-  if T isnot Sql:
+  when T isnot Sql:
     if params.len != 0:
       var inStmtParams: seq[string] = @[]
       for i in 0..params.high:
