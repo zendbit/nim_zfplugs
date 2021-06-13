@@ -113,7 +113,7 @@ type
     timeFormat*: string
     dateFormat*: string
     timestampFormat*: string
-    uniqueKey*: seq[string]
+    isMultipleUnique: bool
 
 ##
 ##  dbmsTable pragma this is for type definition
@@ -175,6 +175,7 @@ template dbmsField*(
   isNull: bool = true,
   length: uint64 = 0,
   isUnique: bool = false,
+  isMultipleUnique: bool = false,
   dataType: DbmsDataType = VARCHAR,
   timeFormat: string = "HH:mm:ss",
   dateFormat: string = "YYYY-MM-dd",
@@ -185,7 +186,6 @@ template dbmsForeignKeyConstraint*(
   onDelete: string = "CASCADE",
   onUpdate: string = "CASCADE",
   columnRef: string = "") {.pragma.}
-template dbmsUniqueKey*(columns: seq[string]) {.pragma.}
 
 ##  var db: DBConn
 ##
@@ -887,8 +887,8 @@ proc generateCreateTable(
 
     columns.add(column.join(" "))
 
-    if f.uniqueKey.len > 0:
-      uniqueKey = f.uniqueKey
+    if f.isMultipleUnique:
+      uniqueKey.add(columnName)
 
   if primaryKey.len != 0:
     columns.add(&"""PRIMARY KEY({primaryKey.join(", ")})""")
@@ -1143,6 +1143,7 @@ proc validatePragma[T](t: T): seq[DbmsFieldType] =
           dbmsFieldType.timeFormat = dbmsFieldPragma.timeFormat
           dbmsFieldType.dateFormat = dbmsFieldPragma.dateFormat
           dbmsFieldType.timestampFormat = dbmsFieldPragma.timestampFormat
+          dbmsFieldType.isMultipleUnique = dbmsFieldPragma.isMultipleUnique
 
           var (name, val, nodeKind) = dbmsFieldPragma.name.fieldPair(v)
           if val != "null":
@@ -1161,9 +1162,6 @@ proc validatePragma[T](t: T): seq[DbmsFieldType] =
                   discard
 
           dbmsFieldType.field = (name, val, nodeKind)
-
-          when v.hasCustomPragma(dbmsUniqueKey):
-            dbmsFieldType.uniqueKey = v.getCustomPragmaVal(dbmsUniqueKey)
 
           when v.hasCustomPragma(dbmsForeignKeyRef):
             dbmsFieldType.foreignKeyRef = v.getCustomPragmaVal(dbmsForeignKeyRef).getCustomPragmaVal(dbmsTable)
