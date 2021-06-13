@@ -113,6 +113,7 @@ type
     timeFormat*: string
     dateFormat*: string
     timestampFormat*: string
+    uniqueKey*: seq[string]
 
 ##
 ##  dbmsTable pragma this is for type definition
@@ -184,6 +185,7 @@ template dbmsForeignKeyConstraint*(
   onDelete: string = "CASCADE",
   onUpdate: string = "CASCADE",
   columnRef: string = "") {.pragma.}
+template dbmsUniqueKey*(columns: seq[string]) {.pragma.}
 
 ##  var db: DBConn
 ##
@@ -312,7 +314,7 @@ proc extractKeyValue*[T](
   var values: seq[string] = @[]
   var nodesKind: seq[JsonNodeKind] = @[]
   let obj = %obj
-  for k, v in obj:
+  for k, v in obj.discardNull:
     if k.toLower.contains("-as-"): continue
     
     var skip = false
@@ -786,6 +788,7 @@ proc generateCreateTable(
   var primaryKey: seq[string] = @[]
   var foreignKey: seq[string] = @[]
   var tableName: string
+  var uniqueKey: seq[string] = @[]
   
   for f in fieldList:
     var column: seq[string] = @[]
@@ -884,8 +887,14 @@ proc generateCreateTable(
 
     columns.add(column.join(" "))
 
+    if f.uniqueKey.len > 0:
+      uniqueKey = f.uniqueKey
+
   if primaryKey.len != 0:
     columns.add(&"""PRIMARY KEY({primaryKey.join(", ")})""")
+
+  if uniqueKey.len > 0:
+    columns.add(&"""UNIQUE KEY({uniqueKey.join(", ")})""")
 
   if foreignKey.len != 0:
     columns &= foreignKey
@@ -1134,7 +1143,7 @@ proc validatePragma[T](t: T): seq[DbmsFieldType] =
           dbmsFieldType.timeFormat = dbmsFieldPragma.timeFormat
           dbmsFieldType.dateFormat = dbmsFieldPragma.dateFormat
           dbmsFieldType.timestampFormat = dbmsFieldPragma.timestampFormat
-          
+
           var (name, val, nodeKind) = dbmsFieldPragma.name.fieldPair(v)
           if val != "null":
             if dbmsFieldType.dataType in [TIMESTAMP, TIME, DATE]:
@@ -1152,6 +1161,9 @@ proc validatePragma[T](t: T): seq[DbmsFieldType] =
                   discard
 
           dbmsFieldType.field = (name, val, nodeKind)
+
+          when v.hasCustomPragma(dbmsUniqueKey):
+            dbmsFieldType.uniqueKey = v.getCustomPragmaVal(dbmsUniqueKey)
 
           when v.hasCustomPragma(dbmsForeignKeyRef):
             dbmsFieldType.foreignKeyRef = v.getCustomPragmaVal(dbmsForeignKeyRef).getCustomPragmaVal(dbmsTable)
