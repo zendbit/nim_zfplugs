@@ -14,7 +14,8 @@ zfplugs/csrf
 zfplugs/dbs
 zfplugs/dbms
 zfplugs/dbssql
+zfplugs/layout
 zfplugs/paging
 zfplugs/settings
-zfplugs/session
+zfplugs/session 
 ```
