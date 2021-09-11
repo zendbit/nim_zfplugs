@@ -3,7 +3,7 @@ https://github.com/zendbit/nim.zfcore
 
 #### install
 ```
-nimble install zfplugs
+nimble install zfplugs@#head
 ```
 
 #### usage
