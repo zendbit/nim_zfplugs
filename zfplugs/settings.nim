@@ -8,7 +8,7 @@
 ##
 
 import os, json
-import zfcore
+import zfcore/server
 
 var settings {.threadvar.}: Settings
 settings.deepCopy(zfcoreInstance.settings)

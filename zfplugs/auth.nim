@@ -8,7 +8,7 @@
 ##
 
 import base64, strutils, httpcore
-from zfcore import getValues
+from zfcore/server import getValues
 
 proc validateBasicAuth*(
   httpHeaders: HttpHeaders,

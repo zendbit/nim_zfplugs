@@ -9,7 +9,7 @@
 
 # csrf generator and manager
 import dbs, db_sqlite, times, std/sha1, os, strutils, asyncdispatch
-import zfcore
+import zfcore/server
 from stdext/encrypt_ext import xorEncodeDecode
 
 var csrfDir {.threadvar.}: string
