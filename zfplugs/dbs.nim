@@ -100,7 +100,7 @@ when WITH_MYSQL or WITH_PGSQL or WITH_SQLITE:
               "",
               "")),
             "OK")
-      else:
+      when not WITH_PGSQL and not WITH_MYSQL and not WITH_SQLITE:
         let dbType = $(type T)
         raise newException(ObjectConversionDefect, &"unknown database type {dbType}")
     except Exception as ex:
