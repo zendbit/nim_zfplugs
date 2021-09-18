@@ -136,7 +136,7 @@ when WITH_MYSQL or WITH_PGSQL or WITH_SQLITE:
   ##
   ##  type
   ##    Users
-  ##      {.dbmsTable("users").} = ref object of DbmsModel
+  ##      {.dbmsTable("users").} = ref object
   ##      id
   ##        {.dbmsField(
   ##          isPrimaryKey = true,
@@ -158,7 +158,7 @@ when WITH_MYSQL or WITH_PGSQL or WITH_SQLITE:
   ##          length = 100).}: Option[string]
   ##  
   ##    Address
-  ##      {.dbmsTable("address").} = ref object of DbmsModel
+  ##      {.dbmsTable("address").} = ref object
   ##      id
   ##        {.dbmsField(isPrimaryKey = true,
   ##          dataType = SERIAL,
