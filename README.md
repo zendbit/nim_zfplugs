@@ -12,6 +12,7 @@ available plugins
 zfplugs/auth
 zfplugs/csrf
 zfplugs/layout
+zfplugs/dbms
 zfplugs/paging
 zfplugs/settings
 zfplugs/session 
