@@ -12,8 +12,8 @@ import uri3, json, math, strutils, strformat
 proc genPaging*(
   data: JsonNode,
   url: Uri3,
-  perPage: uint64,
-  numData: uint64): JsonNode {.gcsafe.} =
+  perPage: int64,
+  numData: int64): JsonNode {.gcsafe.} =
   ##
   ##  generate paging:
   ##
@@ -31,7 +31,7 @@ proc genPaging*(
   ##  }
   ##
   
-  let currentPage = url.getQuery("page", "1").parseBiggestUInt
+  let currentPage = url.getQuery("page", "1").parseBiggestInt
   result = %*{
     "pageData": data,
     "nextPage": "",
@@ -48,7 +48,7 @@ proc genPaging*(
       result["page"] = %currentPage
 
     if numData > perPage:
-      let numPage = (numData.float64 / perPage.float64).ceil().uint64
+      let numPage = (numData.float64 / perPage.float64).ceil().int64
       result["numData"] = %numData
       result["numPage"] = %numPage
       if currentPage < numPage:
@@ -68,7 +68,7 @@ proc genPaging*(
 proc genPagingLink*(
   url: string,
   pagingData: JsonNode,
-  pagingStep: uint64 = 10): JsonNode =
+  pagingStep: int64 = 10): JsonNode =
   ##
   ##  generate paging link:
   ##
@@ -90,11 +90,11 @@ proc genPagingLink*(
   ##  }
   ##
   var maxPageToShow = pagingStep
-  let numPage = ($pagingData{"numPage"}).parseBiggestUInt
-  let page = ($pagingData{"page"}).parseBiggestUInt
+  let numPage = ($pagingData{"numPage"}).parseBiggestInt
+  let page = ($pagingData{"page"}).parseBiggestInt
   result = %*{
     "pages": [],
-    "numData": ($pagingData{"numData"}).parseBiggestUInt,
+    "numData": ($pagingData{"numData"}).parseBiggestInt,
     "numPage": numPage,
     "page": page,
     "next": "",
