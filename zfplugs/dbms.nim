@@ -11,12 +11,41 @@ import zfdbms/dbms
 export dbms
 
 when WITH_MYSQL or WITH_PGSQL or WITH_SQLITE:
-  import strformat, times, macros, tables, typetraits, strutils, sequtils, json, options, re
+  import
+    strformat,
+    times,
+    macros,
+    tables,
+    typetraits,
+    strutils,
+    sequtils,
+    json,
+    options,
+    re
 
-  export options, strutils, sequtils, json, strformat
+  export
+    options,
+    strutils,
+    sequtils,
+    json,
+    strformat
 
-  import stdext/[json_ext, strutils_ext, system_ext], settings, zfdbms/[dbs, dbssql]
-  export dbs, dbssql, json_ext, strutils_ext, system_ext
+  import
+    stdext/[
+      xjson,
+      xstrutils,
+      xsystem],
+    settings,
+    zfdbms/[
+      dbs,
+      dbssql]
+
+  export
+    dbs,
+    dbssql,
+    xjson,
+    xstrutils,
+    xsystem
 
   ##  var db: DBConn
   ##

@@ -7,8 +7,15 @@
 ##  Git: https://github.com/zendbit/nim.zfplugs
 ##
 
-import std.sha1, macros
-import zfcore/server, stdext/[encrypt_ext]
+import
+  std/sha1,
+  macros,
+  std/random,
+  strutils
+
+import
+  zfcore/server,
+  stdext/xencrypt
 
 const sessid = "_zfsid"
 
@@ -48,7 +55,7 @@ proc createSessionToken(): string {.gcsafe.} =
   ##
   ##  create string token session.
   ##
-  let token = $secureHash(now().utc().format("YYYY-MM-dd HH:mm:ss:fffffffff"))
+  let token = $secureHash(now().utc().format("YYYY-MM-dd HH:mm:ss:fffffffff") & $rand(1000000000))
   token.writeSession(%*{})
   result = token
 

@@ -7,7 +7,12 @@
 ##  Git: https://github.com/zendbit/nim.zfplugs
 ##
 
-import uri3, json, math, strutils, strformat
+import
+  uri3,
+  json,
+  math,
+  strutils,
+  strformat
 
 proc genPaging*(
   data: JsonNode,

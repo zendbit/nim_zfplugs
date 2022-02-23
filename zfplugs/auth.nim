@@ -7,7 +7,10 @@
 ##  Git: https://github.com/zendbit
 ##
 
-import base64, strutils, httpcore
+import
+  base64,
+  strutils,
+  httpcore
 from zfcore/server import getValues
 
 proc validateBasicAuth*(
