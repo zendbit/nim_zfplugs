@@ -1,9 +1,9 @@
 ##
-##  helper for layout system using moustachu
-##  https://github.com/fenekku/moustachu
+##  helper for layout system using mustache
+##  https://github.com/soasme/nim-mustache
 ##
-import moustachu
-export moustachu
+import mustache
+export mustache
 import os, strformat
 
 type
@@ -60,4 +60,4 @@ proc render*(layout: Layout): string =
   ##
   ##  echo l.render
   ##
-  result = moustachu.render(layout.html, layout.c)
+  result = render(layout.html, layout.c)
