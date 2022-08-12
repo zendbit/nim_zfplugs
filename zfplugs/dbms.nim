@@ -100,3 +100,56 @@ when WITH_MYSQL or WITH_PGSQL or WITH_SQLITE:
       else:
         echo "database section not found!!."
 
+when WITH_MYSQL:
+  ##
+  ##  helper for mysql/mariadb connection
+  ##  just use this to work with mysql/mariadb
+  ##
+  var myDBMS: DBMS[MYSQL]
+
+  proc myDb*(connId: string): DBMS[MYSQL] {.gcsafe.} =
+    {.cast(gcsafe).}:
+      if myDBMS.isNil:
+        myDBMS = newDBMS[MYSQL](connId)
+
+      if not myDBMS.ping:
+        if not myDBMS.tryConnect:
+          echo "Cannot connect to MySQL/MariaDb!"
+
+      result = myDBMS
+
+when WITH_PGSQL:
+  ##
+  ##  helper for postgre connection
+  ##  just use this to work with postgre
+  ##
+  var pgDBMS: DBMS[PGSQL]
+
+  proc pgDb*(connId: string): DBMS[PGSQL] {.gcsafe.} =
+    {.cast(gcsafe).}:
+      if pgDBMS.isNil:
+        pgDBMS = newDBMS[PGSQL](connId)
+
+      if not pgDBMS.ping:
+        if not pgDBMS.tryConnect:
+          echo "Cannot connect to PostgreSQL!"
+
+      result = pgDBMS
+
+when WITH_SQLITE:
+  ##
+  ##  helper for sqlite connection
+  ##  just use this to work with sqlite
+  ##
+  var sqliteDBMS: DBMS[SQLITE]
+
+  proc sqliteDb*(connId: string): DBMS[SQLITE] {.gcsafe.} =
+    {.cast(gcsafe).}:
+      if sqliteDBMS.isNil:
+        sqliteDBMS = newDBMS[SQLITE](connId)
+
+      if not sqliteDBMS.ping:
+        if not sqliteDBMS.tryConnect:
+          echo "Cannot connect to SQLite!"
+
+      result = sqliteDBMS
