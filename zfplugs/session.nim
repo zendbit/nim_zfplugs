@@ -28,7 +28,7 @@ if sessionDir.existsDir:
   # keep the session for month
   zfcoreInstance.settings.addTmpCleanupDir("session", 2592000)
 
-proc isSessionExists(sessionToken: string): bool {.gcsafe.} =
+proc isSessionExists*(sessionToken: string): bool {.gcsafe.} =
   ##
   ##  check if session already exists:
   ##
@@ -36,7 +36,7 @@ proc isSessionExists(sessionToken: string): bool {.gcsafe.} =
   ##
   result = sessionDir.joinPath(sessionToken).existsFile
 
-proc writeSession(
+proc writeSession*(
   sessionToken: string,
   data: JsonNode): bool {.discardable gcsafe.} =
   ##
@@ -49,7 +49,7 @@ proc writeSession(
   f.close
   result = sessionToken.isSessionExists
 
-proc createSessionToken(): string {.gcsafe.} =
+proc createSessionToken*(): string {.gcsafe.} =
   ##
   ##  create sossion token:
   ##
@@ -59,7 +59,7 @@ proc createSessionToken(): string {.gcsafe.} =
   token.writeSession(%*{})
   result = token
 
-proc createSessionFromToken(token: string): bool {.gcsafe.} =
+proc createSessionFromToken*(token: string): bool {.gcsafe.} =
   ##
   ##  create session from token:
   ##
@@ -70,7 +70,21 @@ proc createSessionFromToken(token: string): bool {.gcsafe.} =
   if not token.isSessionExists:
     token.writeSession(%*{})
 
-proc readSession(sessionToken: string): JsonNode {.gcsafe.} =
+proc newSession*(data: JsonNode): string {.gcsafe.} =
+  ##
+  ##  create new session on server will return token access
+  ##
+  ##  token access is needed for retrieve, read, write and store the data
+  ##  need to remember the token if using server side session
+  ##  for cookie session token will manage by browser token will save on the cookie session
+  ##
+  let token = createSessionToken()
+  if token.isSessionExists:
+    token.writeSession(data)
+
+  result = token
+
+proc readSession*(sessionToken: string): JsonNode {.gcsafe.} =
   ##
   ##  read session:
   ##
@@ -81,7 +95,7 @@ proc readSession(sessionToken: string): JsonNode {.gcsafe.} =
     result = f.readAll().xorEncodeDecode(sessionToken).parseJson
     f.close
 
-proc getSession*(
+proc getCookieSession*(
   ctx: HttpContext,
   key: string): JsonNode {.gcsafe.} =
   ##
@@ -95,7 +109,7 @@ proc getSession*(
   if result.isNil:
     result = %*{}
 
-proc addSession*(
+proc addCookieSession*(
   ctx: HttpContext,
   key: string, value: JsonNode,
   domain: string = "",
@@ -126,7 +140,7 @@ proc addSession*(
     sessionData[key] = value
     token.writeSession(sessionData)
 
-proc deleteSession*(
+proc deleteCookieSession*(
   ctx: HttpContext,
   key: string) {.gcsafe.} =
   ##
@@ -139,7 +153,7 @@ proc deleteSession*(
     if sessionData.hasKey(key):
       sessionData.delete(key)
 
-proc destroySession*(ctx: HttpContext) {.gcsafe.} =
+proc destroyCookieSession*(ctx: HttpContext) {.gcsafe.} =
   ##
   ##  destory session:
   ##
@@ -152,7 +166,7 @@ proc destroySession*(ctx: HttpContext) {.gcsafe.} =
     cookie.del(sessid)
     ctx.setCookie(cookie)
 
-macro addSession*(
+macro addCookieSession*(
   key: string,
   value: JsonNode) =
   ##
@@ -163,13 +177,13 @@ macro addSession*(
   nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),
-      newIdentNode("addSession")
+      newIdentNode("addCookieSession")
     ),
     key,
     value
   )
 
-macro getSession*(key: string): untyped =
+macro getCookieSession*(key: string): untyped =
   ##
   ##  get session macro:
   ##
@@ -178,12 +192,12 @@ macro getSession*(key: string): untyped =
   return nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),
-      newIdentNode("getSession")
+      newIdentNode("getCookieSession")
     ),
     key
   )
 
-macro deleteSession*(key: string): untyped =
+macro deleteCookieSession*(key: string): untyped =
   ##
   ##  delete session macro:
   ##
@@ -192,12 +206,12 @@ macro deleteSession*(key: string): untyped =
   nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),
-      newIdentNode("deleteSession")
+      newIdentNode("deleteCookieSession")
     ),
     key
   )
 
-macro destroySession*(): untyped =
+macro destroyCookieSession*(): untyped =
   ##
   ##  destroy session macro:
   ##
@@ -206,7 +220,7 @@ macro destroySession*(): untyped =
   nnkCall.newTree(
     nnkDotExpr.newTree(
       newIdentNode("ctx"),
-      newIdentNode("destroySession")
+      newIdentNode("destroyCookieSession")
     )
   )
 
