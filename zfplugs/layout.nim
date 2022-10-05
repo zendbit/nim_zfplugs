@@ -17,15 +17,17 @@ proc newLayoutFromFile*(name: string): Layout =
   ##
   let l = Layout()
   var layoutPath = name
-  if not name.fileExists:
-    layoutPath = getAppDir().joinPath(name)
+  if not layoutPath.fileExists:
+    let templateDir = getAppDir().joinPath("template")
+    if templateDir.dirExists:
+      layoutPath = templateDir.joinPath(name)
 
   if layoutPath.fileExists:
     let readHtml = open(layoutPath, fmRead)
     l.html = readHtml.readAll
     readHtml.close
   else:
-    l.html = &"Layout file not found {name}"
+    l.html = &"Layout file not found {layoutPath}"
   l.c = newContext()
   result = l
 
