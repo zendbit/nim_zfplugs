@@ -1,11 +1,11 @@
 # Package
-version     = "0.1.16"
+version     = "0.1.17"
 author      = "Amru Rosyada"
 description = "This is the plugins for the zfcore framework https://github.com/zendbit/nim.zfcore"
 license     = "BSD"
 
 # Deps
 requires "nim >= 1.4.0"
-requires "zfdbms >= 0.0.8"
-requires "zfcore >= 1.1.15"
+requires "zfdbms >= 0.0.9"
+requires "zfcore >= 1.1.16"
 requires "mustache >= 0.4.3"
