@@ -13,6 +13,9 @@ import zfcore/server
 var settings {.threadvar.}: Settings
 settings.deepCopy(zfcoreInstance.settings)
 
+proc appSettings*(): Settings {.gcsafe.} =
+  result = settings
+
 proc jsonSettings*(): JsonNode {.gcsafe.} =
   ##
   ##  json settings:
