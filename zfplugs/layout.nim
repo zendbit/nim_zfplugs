@@ -4,7 +4,7 @@
 ##
 import mustache
 export mustache
-import os, strformat
+import os, strformat, strutils
 
 type
   Layout* = ref object
@@ -16,7 +16,7 @@ proc newLayoutFromFile*(name: string): Layout =
   ## Create new layout, pass layout file path to load
   ##
   let l = Layout()
-  var layoutPath = name
+  var layoutPath = name.replace("::", $DirSep)
   if not layoutPath.fileExists:
     let templateDir = getAppDir().joinPath("template")
     if templateDir.dirExists:
