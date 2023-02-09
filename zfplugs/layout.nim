@@ -15,10 +15,10 @@ proc newLayoutFromFile*(name: string): Layout =
   ##
   ## Create new layout, pass layout file path to load
   ##
+  let templateDir = getAppDir().joinPath("template")
   let l = Layout()
-  var layoutPath = name.replace("::", $DirSep)
+  var layoutPath = templateDir.joinPath(name.replace("::", $DirSep))
   if not layoutPath.fileExists:
-    let templateDir = getAppDir().joinPath("template")
     if templateDir.dirExists:
       layoutPath = templateDir.joinPath(name)
 
