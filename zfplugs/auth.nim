@@ -24,7 +24,20 @@ proc validateBasicAuth*(
   ##  if username and password in headers valid with given username and password return true.
   ##
   let auth = httpHeaders.getValues("Authorization").split(" ")
-  if auth.len() == 2:
+  if auth.len() == 2 and auth[0].toLower.strip == "basic":
     let userPass = auth[1].decode().split(":")
     if userPass.len() == 2:
       result = userPass[0] == username and userPass[1] == password
+
+proc validateBearerAuth*(
+  httpHeaders: HttpHeaders,
+  token: string): bool {.gcsafe.} =
+  ##
+  ##  validate bearer
+  ##
+  ##  make sure token same with bearer Auth from header
+  ##
+
+  let auth = httpHeaders.getValues("Authorization").split(" ")
+  if auth.len() == 2 and auth[0].toLower.strip == "bearer":
+    result = auth[1].strip == token.strip
