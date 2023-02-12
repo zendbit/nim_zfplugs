@@ -7,7 +7,7 @@ export mustache
 import os, strformat, strutils
 
 type
-  Layout* = ref object
+  Layout* = ref object of RootObj
     html: string
     c*: Context
 
