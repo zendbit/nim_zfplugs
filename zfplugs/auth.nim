@@ -7,11 +7,13 @@
 ##  Git: https://github.com/zendbit
 ##
 
-import
-  base64,
-  strutils,
-  httpcore
+import base64
+import strutils
+import httpcore
+import json
+
 from zfcore/server import getValues
+import session
 
 proc validateBasicAuth*(
   httpHeaders: HttpHeaders,
@@ -41,3 +43,25 @@ proc validateBearerAuth*(
   let auth = httpHeaders.getValues("Authorization").split(" ")
   if auth.len() == 2 and auth[0].toLower.strip == "bearer":
     result = auth[1].strip == token.strip
+
+proc validateMagicStr*(
+  httpHeaders: HttpHeaders): bool {.gcsafe.} =
+  ##
+  ##  validate Magic-String headers
+  ##
+  ##  this coop with bearer token make it pair and secure
+  ##  magic str will destroy after calling validateMagicStr
+  ##
+
+  let mStr = httpHeaders.getValues("Magic-String").strip
+  result = mStr.isSessionExists
+  mStr.destroySession
+
+proc generateMagicStr*(): string =
+  ##
+  ##  generate magic str
+  ##
+  ##  this is only valid fo 120 seconds/2 minute
+  ##
+  result = newSession(%*{}, 120)
+

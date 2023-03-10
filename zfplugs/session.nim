@@ -11,7 +11,8 @@ import
   std/sha1,
   macros,
   std/random,
-  strutils
+  strutils,
+  parseutils
 
 import
   zfcore/server,
@@ -25,8 +26,32 @@ if not sessionDir.existsDir:
   sessionDir.createDir
 
 if sessionDir.existsDir:
-  # keep the session for month
-  zfcoreInstance.settings.addTmpCleanupDir("session", 2592000)
+  ##
+  ##  register session checking to tasksPool
+  ##
+  zfcoreInstance.tasksPool["session"] = TasksPoolAction(
+    action: proc (param: JsonNode) =
+      for file in param.getStr.joinPath("*").walkFiles:
+        let fileInfo = file.extractFilename.split("-")
+        let fileInfoLen = fileInfo.len
+        ##
+        ##  session format is
+        ##  token_expirationtime
+        ##  need split with "-" to get expirationtime
+        ##
+        var expiredTime: int64
+        if fileInfoLen >= 2 and
+          fileInfo[fileInfoLen - 1].parseBiggestInt(expiredTime) != 0 and
+          now().utc.toTime.toUnix < expiredTime:
+          continue
+
+        file.removeFile
+    ,
+    param: %sessionDir
+  )
+
+proc generateExpired(expired: int64): int64 =
+  result = now().utc.toTime.toUnix + expired
 
 proc isSessionExists*(sessionToken: string): bool {.gcsafe.} =
   ##
@@ -49,13 +74,13 @@ proc writeSession*(
   f.close
   result = sessionToken.isSessionExists
 
-proc createSessionToken*(): string {.gcsafe.} =
+proc createSessionToken*(expired: int64 = 2592000): string {.gcsafe.} =
   ##
   ##  create sossion token:
   ##
   ##  create string token session.
   ##
-  let token = $secureHash(now().utc().format("YYYY-MM-dd HH:mm:ss:fffffffff") & $rand(1000000000))
+  let token = $secureHash(now().utc().format("YYYY-MM-dd HH:mm:ss:fffffffff") & $rand(1000000000)) & "-" & $expired.generateExpired()
   token.writeSession(%*{})
   result = token
 
@@ -70,7 +95,7 @@ proc createSessionFromToken*(token: string): bool {.gcsafe.} =
   if not token.isSessionExists:
     token.writeSession(%*{})
 
-proc newSession*(data: JsonNode): string {.gcsafe.} =
+proc newSession*(data: JsonNode, expired: int64 = 2592000): string {.gcsafe.} =
   ##
   ##  create new session on server will return token access
   ##
@@ -78,7 +103,7 @@ proc newSession*(data: JsonNode): string {.gcsafe.} =
   ##  need to remember the token if using server side session
   ##  for cookie session token will manage by browser token will save on the cookie session
   ##
-  let token = createSessionToken()
+  let token = createSessionToken(expired)
   if token.isSessionExists:
     token.writeSession(data)
 
@@ -94,6 +119,15 @@ proc readSession*(sessionToken: string): JsonNode {.gcsafe.} =
     let f = sessionDir.joinPath(sessionToken).open
     result = f.readAll().xorEncodeDecode(sessionToken).parseJson
     f.close
+
+proc destroySession*(sessionToken: string) {.gcsafe.} =
+  ##
+  ##  read session:
+  ##
+  ##  read session data with given token.
+  ##
+  if sessionToken.isSessionExists:
+    sessionDir.joinPath(sessionToken).removeFile
 
 proc getCookieSession*(
   ctx: HttpContext,
@@ -162,7 +196,7 @@ proc destroyCookieSession*(ctx: HttpContext) {.gcsafe.} =
   var cookie = ctx.getCookie
   let token = cookie.getOrDefault(sessid)
   if token != "":
-    sessionDir.joinPath(token).removeFile
+    token.destroySession
     cookie.del(sessid)
     ctx.setCookie(cookie)
 

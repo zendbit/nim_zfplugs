@@ -8,25 +8,8 @@
 ##
 
 # csrf generator and manager
-import
-  dbs,
-  db_sqlite,
-  times,
-  std/sha1,
-  os,
-  strutils,
-  asyncdispatch
-
-import zfcore/server
-from stdext/encryptx import xorEncodeDecode
-
-var csrfDir {.threadvar.}: string
-csrfDir = zfcoreInstance.settings.tmpDir.joinPath("csrf")
-if not csrfDir.existsDir:
-  csrfDir.createDir
-
-if csrfDir.existsDir:
-  zfcoreInstance.settings.addTmpCleanupDir("csrf")
+import json
+import zfplugs/session
 
 proc genCsrf*(): string {.gcsafe.} =
   ##
@@ -34,12 +17,7 @@ proc genCsrf*(): string {.gcsafe.} =
   ##
   ##  generate csrf token string, return unique csrf token
   ##
-  let tokenSeed = now().utc.format("yyyy-MM-dd HH:mm:ss:fffffffff".initTimeFormat)
-  let token = $secureHash(tokenSeed)
-  let f = csrfDir.joinPath(token).open(fmWrite)
-  f.write("")
-  f.close
-  result = token
+  result = newSession(%*{}, 3600)
 
 proc isCsrfValid*(token: string): bool {.gcsafe.} =
   ##
@@ -47,12 +25,12 @@ proc isCsrfValid*(token: string): bool {.gcsafe.} =
   ##
   ##  check given csrf token is valid or not, if valid return true.
   ##
-  result = csrfDir.joinPath(token).existsFile
+  result = token.isSessionExists
 
-proc delCsrf*(token: string) {.gcsafe.} =
+proc destroyCsrf*(token: string) {.gcsafe.} =
   ##
   ##  delete the csrf token:
   ##
   ##  delete given csrf token.
   ##
-  csrfDir.joinPath(token).removeFile
+  token.destroySession

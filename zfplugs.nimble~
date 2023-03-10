@@ -1,5 +1,5 @@
 # Package
-version     = "0.2.0"
+version     = "0.3.0"
 author      = "Amru Rosyada"
 description = "This is the plugins for the zfcore framework https://github.com/zendbit/nim.zfcore"
 license     = "BSD"
