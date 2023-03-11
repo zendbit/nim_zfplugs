@@ -7,5 +7,5 @@ license     = "BSD"
 # Deps
 requires "nim >= 1.4.0"
 requires "zfdbms >= 0.0.10"
-requires "zfcore >= 1.2.2"
+requires "zfcore >= 1.1.20"
 requires "mustache >= 0.4.3"

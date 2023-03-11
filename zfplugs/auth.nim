@@ -13,7 +13,7 @@ import httpcore
 import json
 
 from zfcore/server import getValues
-import session
+import csrf
 
 proc validateBasicAuth*(
   httpHeaders: HttpHeaders,
@@ -40,7 +40,7 @@ proc validateBearerAuth*(
   ##  make sure token same with bearer Auth from header
   ##
 
-  let auth = httpHeaders.getValues("Authorization").split(" ")
+  let auth = httpHeaders.getValues("Authorization").strip.split(" ")
   if auth.len() == 2 and auth[0].toLower.strip == "bearer":
     result = auth[1].strip == token.strip
 
@@ -52,16 +52,24 @@ proc validateMagicStr*(
   ##  this coop with bearer token make it pair and secure
   ##  magic str will destroy after calling validateMagicStr
   ##
+  ##  magic str must formated as base64 encode of
+  ##  "<token>:<uuid>"
+  ##
 
-  let mStr = httpHeaders.getValues("Magic-String").strip
-  result = mStr.isSessionExists
-  mStr.destroySession
+  let mStr = httpHeaders.getValues("Magic-String")
+    .strip.decode.split(":")
 
-proc generateMagicStr*(): string =
+  if mStr.len == 2:
+    let token = mStr[0].strip
+    let uuid = mStr[1].strip
+    result = token.isCsrfValid(uuid)
+    token.destroyCsrf
+
+proc newMagicStr*(): CSRF =
   ##
   ##  generate magic str
   ##
   ##  this is only valid fo 120 seconds/2 minute
   ##
-  result = newSession(%*{}, 120)
+  result = newCSRF(120)
 
