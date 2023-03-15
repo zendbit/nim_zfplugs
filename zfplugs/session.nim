@@ -53,7 +53,7 @@ if sessionDir.existsDir:
 proc generateExpired(expired: int64): int64 =
   result = now().utc.toTime.toUnix + expired
 
-proc isSessionExists*(sessionToken: string): bool {.gcsafe.} =
+proc isSessionExists(sessionToken: string): bool {.gcsafe.} =
   ##
   ##  check if session already exists:
   ##
@@ -61,7 +61,7 @@ proc isSessionExists*(sessionToken: string): bool {.gcsafe.} =
   ##
   result = sessionDir.joinPath(sessionToken).existsFile
 
-proc writeSession*(
+proc writeSession(
   sessionToken: string,
   data: JsonNode): bool {.discardable gcsafe.} =
   ##
@@ -74,7 +74,7 @@ proc writeSession*(
   f.close
   result = sessionToken.isSessionExists
 
-proc createSessionToken*(expired: int64 = 2592000): string {.gcsafe.} =
+proc createSessionToken(expired: int64 = 2592000): string {.gcsafe.} =
   ##
   ##  create sossion token:
   ##
@@ -84,7 +84,7 @@ proc createSessionToken*(expired: int64 = 2592000): string {.gcsafe.} =
   token.writeSession(%*{})
   result = token
 
-proc createSessionFromToken*(token: string): bool {.gcsafe.} =
+proc createSessionFromToken(token: string): bool {.gcsafe.} =
   ##
   ##  create session from token:
   ##
@@ -95,7 +95,7 @@ proc createSessionFromToken*(token: string): bool {.gcsafe.} =
   if not token.isSessionExists:
     token.writeSession(%*{})
 
-proc newSession*(data: JsonNode, expired: int64 = 2592000): string {.gcsafe.} =
+proc newSession(data: JsonNode, expired: int64 = 2592000): string {.gcsafe.} =
   ##
   ##  create new session on server will return token access
   ##
@@ -109,7 +109,7 @@ proc newSession*(data: JsonNode, expired: int64 = 2592000): string {.gcsafe.} =
 
   result = token
 
-proc readSession*(sessionToken: string): JsonNode {.gcsafe.} =
+proc readSession(sessionToken: string): JsonNode {.gcsafe.} =
   ##
   ##  read session:
   ##
@@ -120,7 +120,7 @@ proc readSession*(sessionToken: string): JsonNode {.gcsafe.} =
     result = f.readAll().xorEncodeDecode(sessionToken).parseJson
     f.close
 
-proc destroySession*(sessionToken: string) {.gcsafe.} =
+proc destroySession(sessionToken: string) {.gcsafe.} =
   ##
   ##  read session:
   ##
@@ -138,18 +138,17 @@ proc getCookieSession*(
   ##  get session value with given key from zfcore HttpContext.
   ##
   let sessionData = ctx.getCookie().getOrDefault(sessid).readSession()
-  if not sessionData.isNil:
-    result = sessionData{key}
-  if result.isNil:
-    result = %*{}
+  if not sessionData.isNil and sessionData.hasKey("data"):
+    result = sessionData{"data"}{key}
 
-proc addCookieSession*(
+proc initCookieSession*(
   ctx: HttpContext,
-  key: string, value: JsonNode,
   domain: string = "",
   path: string = "/",
   expires: string = "",
-  secure: bool = false) {.gcsafe.} =
+  secure: bool = false,
+  sameSite: string = "Lax",
+  httpOnly: bool = true) {.gcsafe.} =
   ##
   ##  add session:
   ##
@@ -158,20 +157,34 @@ proc addCookieSession*(
   var sessionData: JsonNode
   let cookie = ctx.getCookie
   var token = cookie.getOrDefault(sessid)
-  if token != "":
-    token = cookie[sessid]
+
+  if token.isSessionExists:
     sessionData = token.readSession
 
-  else:
-    token = createSessionToken()
-    ctx.setCookie({sessid: token}.newStringTable, domain, path, expires, secure)
+  elif token == "":
+    ##
+    ##  make sure token is already set in the client cookie
+    ##  prevent ddos attack
+    ##
+    var expiresFormat: string
+    var expiresVal: int64
+    if expires == "":
+      expiresFormat = ((now().utc + 7.days).toCookieDateFormat)
 
-  if sessionData.isNil:
+    expiresVal = expiresFormat.parseFromCookieDateFormat.toTime.toUnix
+
+    token = createSessionToken(expiresVal - now().utc.toTime.toUnix)
+    ctx.setCookie({sessid: token}.newStringTable, domain, path, expiresFormat, secure, sameSite, httpOnly)
+
+  token = cookie.getOrDefault(sessid)
+  if token != "" and not token.isSessionExists:
     discard token.createSessionFromToken()
-  
-  sessionData = token.readSession
-  if not sessionData.isNil:
-    sessionData[key] = value
+
+  if token.isSessionExists:
+    sessionData = token.readSession
+    if sessionData.isNil or sessionData{"data"}.isNil:
+      sessionData = %*{"data": {}}
+
     token.writeSession(sessionData)
 
 proc deleteCookieSession*(
@@ -182,10 +195,28 @@ proc deleteCookieSession*(
   ##
   ##  delete session data with given key from zfcore HttpContext.
   ##
-  let sessionData = ctx.getCookie().getOrDefault(sessid).readSession
-  if not sessionData.isNil:
-    if sessionData.hasKey(key):
-      sessionData.delete(key)
+  let token = ctx.getCookie().getOrDefault(sessid)
+  let sessionData = token.readSession
+  if not sessionData.isNil and sessionData.hasKey("data"):
+    if sessionData{"data"}.hasKey(key):
+      sessionData{"data"}.delete(key)
+      token.writeSession(sessionData)
+
+
+proc addCookieSession*(
+  ctx: HttpContext,
+  key: string,
+  val: JsonNode) {.gcsafe.} =
+  ##
+  ##  add item to session:
+  ##
+  ##  delete session data with given key from zfcore HttpContext.
+  ##
+  let token = ctx.getCookie().getOrDefault(sessid)
+  let sessionData = token.readSession
+  if not sessionData.isNil and sessionData.hasKey("data"):
+    sessionData{"data"}{key} = val
+    token.writeSession(sessionData)
 
 proc destroyCookieSession*(ctx: HttpContext) {.gcsafe.} =
   ##
@@ -195,9 +226,11 @@ proc destroyCookieSession*(ctx: HttpContext) {.gcsafe.} =
   ##
   var cookie = ctx.getCookie
   let token = cookie.getOrDefault(sessid)
-  if token != "":
+  if token.isSessionExists:
     token.destroySession
     cookie.del(sessid)
+
+  if token != "":
     ctx.setCookie(cookie)
 
 macro addCookieSession*(
@@ -215,6 +248,31 @@ macro addCookieSession*(
     ),
     key,
     value
+  )
+
+macro initCookieSession*(
+  domain: string = "",
+  path: string = "/",
+  expires: string = "",
+  secure: bool = false,
+  sameSite: string = "Lax",
+  httpOnly: bool = true) =
+  ##
+  ##  init default cookie session
+  ##  this will create session with default key value:
+  ##  {"data": {}}
+  ##
+  nnkCall.newTree(
+    nnkDotExpr.newTree(
+      newIdentNode("ctx"),
+      newIdentNode("initCookieSession")
+    ),
+    domain,
+    path,
+    expires,
+    secure,
+    sameSite,
+    httpOnly
   )
 
 macro getCookieSession*(key: string): untyped =
