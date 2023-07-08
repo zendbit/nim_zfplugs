@@ -7,17 +7,17 @@ export mustache
 import os, strformat, strutils
 
 type
-  Layout* = ref object of RootObj
+  ZView* = ref object of RootObj
     html: string
     c*: Context
 
-proc newLayoutFromFile*(name: string, searchDirs: seq[string] = @["./"]): Layout =
+proc newViewFromFile*(name: string, searchDirs: seq[string] = @["./"]): ZView =
   ##
   ## Create new layout, pass layout file path to load
   ##
   let templateDir = getAppDir().joinPath("template")
   let searchTemplates = searchDirs & @[templateDir];
-  let l = Layout()
+  let l = ZView()
   var layoutPath = templateDir.joinPath(name.replace("::", $DirSep))
   if not layoutPath.fileExists:
     if templateDir.dirExists:
@@ -32,21 +32,21 @@ proc newLayoutFromFile*(name: string, searchDirs: seq[string] = @["./"]): Layout
   l.c = newContext(searchDirs = searchTemplates)
   result = l
 
-proc newLayout*(tpl: string, searchDirs: seq[string] = @["./"]): Layout =
+proc newView*(tpl: string, searchDirs: seq[string] = @["./"]): ZView =
   ##
   ## Create new layout, pass layout template string
   ##
   let templateDir = getAppDir().joinPath("template")
   let searchTemplates = searchDirs & @[templateDir];
-  result = Layout(html: tpl, c: newContext(searchDirs = searchTemplates))
+  result = ZView(html: tpl, c: newContext(searchDirs = searchTemplates))
 
-proc clear*(layout: Layout) =
+proc clear*(view: ZView) =
   ##
   ##  Clear layout context parameter
   ##
-  layout.c = newContext()
+  view.c = newContext()
 
-proc render*(layout: Layout): string =
+proc render*(view: ZView): string =
   ##
   ##  Render content with given context
   ##
@@ -65,4 +65,4 @@ proc render*(layout: Layout): string =
   ##
   ##  echo l.render
   ##
-  result = render(layout.html, layout.c)
+  result = render(view.html, view.c)
