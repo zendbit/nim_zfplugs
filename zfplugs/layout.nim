@@ -11,11 +11,12 @@ type
     html: string
     c*: Context
 
-proc newLayoutFromFile*(name: string): Layout =
+proc newLayoutFromFile*(name: string, searchDirs: seq[string] = @["./"]): Layout =
   ##
   ## Create new layout, pass layout file path to load
   ##
   let templateDir = getAppDir().joinPath("template")
+  let searchTemplates = searchDirs & @[templateDir];
   let l = Layout()
   var layoutPath = templateDir.joinPath(name.replace("::", $DirSep))
   if not layoutPath.fileExists:
@@ -28,14 +29,16 @@ proc newLayoutFromFile*(name: string): Layout =
     readHtml.close
   else:
     l.html = &"Layout file not found {layoutPath}"
-  l.c = newContext()
+  l.c = newContext(searchDirs = searchTemplates)
   result = l
 
-proc newLayout*(tpl: string): Layout =
+proc newLayout*(tpl: string, searchDirs: seq[string] = @["./"]): Layout =
   ##
   ## Create new layout, pass layout template string
   ##
-  result = Layout(html: tpl, c: newContext())
+  let templateDir = getAppDir().joinPath("template")
+  let searchTemplates = searchDirs & @[templateDir];
+  result = Layout(html: tpl, c: newContext(searchDirs = searchTemplates))
 
 proc clear*(layout: Layout) =
   ##
