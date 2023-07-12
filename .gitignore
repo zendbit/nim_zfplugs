@@ -2,3 +2,5 @@
 *.nim~
 *.un~
 nimbledeps
+*.*~
+*.swp
