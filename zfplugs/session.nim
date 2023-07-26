@@ -53,7 +53,7 @@ if sessionDir.existsDir:
 proc generateExpired(expired: int64): int64 =
   result = now().utc.toTime.toUnix + expired
 
-proc isSessionExists(sessionToken: string): bool {.gcsafe.} =
+proc isSessionExists*(sessionToken: string): bool {.gcsafe.} =
   ##
   ##  check if session already exists:
   ##
@@ -61,7 +61,7 @@ proc isSessionExists(sessionToken: string): bool {.gcsafe.} =
   ##
   result = sessionDir.joinPath(sessionToken).existsFile
 
-proc writeSession(
+proc writeSession*(
   sessionToken: string,
   data: JsonNode): bool {.discardable gcsafe.} =
   ##
@@ -74,7 +74,7 @@ proc writeSession(
   f.close
   result = sessionToken.isSessionExists
 
-proc createSessionToken(expired: int64 = 2592000): string {.gcsafe.} =
+proc createSessionToken*(expired: int64 = 2592000): string {.gcsafe.} =
   ##
   ##  create sossion token:
   ##
@@ -84,7 +84,7 @@ proc createSessionToken(expired: int64 = 2592000): string {.gcsafe.} =
   token.writeSession(%*{})
   result = token
 
-proc createSessionFromToken(token: string): bool {.gcsafe.} =
+proc createSessionFromToken*(token: string): bool {.gcsafe.} =
   ##
   ##  create session from token:
   ##
@@ -95,7 +95,7 @@ proc createSessionFromToken(token: string): bool {.gcsafe.} =
   if not token.isSessionExists:
     token.writeSession(%*{})
 
-proc newSession(data: JsonNode, expired: int64 = 2592000): string {.gcsafe.} =
+proc newSession*(data: JsonNode, expired: int64 = 2592000): string {.gcsafe.} =
   ##
   ##  create new session on server will return token access
   ##
@@ -109,7 +109,7 @@ proc newSession(data: JsonNode, expired: int64 = 2592000): string {.gcsafe.} =
 
   result = token
 
-proc readSession(sessionToken: string): JsonNode {.gcsafe.} =
+proc readSession*(sessionToken: string): JsonNode {.gcsafe.} =
   ##
   ##  read session:
   ##
@@ -120,7 +120,7 @@ proc readSession(sessionToken: string): JsonNode {.gcsafe.} =
     result = f.readAll().xorEncodeDecode(sessionToken).parseJson
     f.close
 
-proc destroySession(sessionToken: string) {.gcsafe.} =
+proc destroySession*(sessionToken: string) {.gcsafe.} =
   ##
   ##  read session:
   ##
